@@ -6,21 +6,18 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0f172a">
-<meta name="description" content="Dalmex Scheduler — Truck scheduling for Dalmex Recycling LLC.">
 <title>Dalmex Scheduler — Dalmex Recycling LLC</title>
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect fill='%230f172a' width='100' height='100' rx='20'/%3E%3Ctext x='50' y='65' font-size='50' text-anchor='middle' fill='%2310b981' font-family='sans-serif' font-weight='bold'%3ED%3C/text%3E%3C/svg%3E">
 
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
-  tailwind.config = {
-    theme: { extend: {
-      colors: {
-        ob: { 500:'#10b981', 600:'#059669', 700:'#047857', 900:'#064e3b' },
-        ib: { 500:'#3b82f6', 600:'#2563eb', 700:'#1d4ed8', 900:'#1e3a8a' },
-      },
-      fontFamily: { display: ['"DM Sans"','sans-serif'], mono: ['"JetBrains Mono"','monospace'] }
-    } }
-  }
+  tailwind.config = { theme: { extend: {
+    colors: {
+      ob: { 500:'#10b981', 600:'#059669', 700:'#047857', 900:'#064e3b' },
+      ib: { 500:'#3b82f6', 600:'#2563eb', 700:'#1d4ed8', 900:'#1e3a8a' },
+    },
+    fontFamily: { display: ['"DM Sans"','sans-serif'], mono: ['"JetBrains Mono"','monospace'] }
+  } } }
 </script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 
@@ -42,7 +39,10 @@
   ::-webkit-scrollbar-track { background: #1e293b; }
   ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
   .inactive-row { opacity: 0.5; }
-  .bol-thumb:active { transform: scale(0.95); }
+  .bol-thumb:active, .copyable:active { transform: scale(0.95); }
+  .copyable { cursor: pointer; transition: color 0.15s; }
+  .copyable:hover { color: #10b981 !important; }
+  .score-bar { transition: width 0.6s ease; }
 </style>
 </head>
 
@@ -78,9 +78,10 @@
         <p class="text-sm text-slate-400">Select a date, then tap a 1-hour slot to book.</p>
       </div>
       <div class="flex gap-2">
-        <button id="prevDay" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">◀ Prev</button>
+        <button id="prevDay" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">◀</button>
+        <button id="todayBtn" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">Today</button>
         <input type="date" id="bookDate" class="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm">
-        <button id="nextDay" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">Next ▶</button>
+        <button id="nextDay" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">▶</button>
       </div>
     </div>
     <div class="flex gap-4 mb-4 text-xs flex-wrap">
@@ -96,15 +97,14 @@
     <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
       <div>
         <h2 class="text-2xl font-bold">Yard Dashboard</h2>
-        <p class="text-sm text-slate-400">Mark trucks as arrived or completed.</p>
+        <p class="text-sm text-slate-400" id="dashSubtitle">Mark trucks as arrived or completed.</p>
       </div>
       <div class="flex gap-2 items-center">
-        <div id="adminIndicator" class="hidden flex items-center gap-1 px-2 py-1 rounded bg-ob-900/50 text-ob-500 text-xs font-bold">🔓 ADMIN</div>
         <div class="flex items-center gap-1.5 text-xs text-slate-400 mr-2">
           <span class="pulse-dot w-2 h-2 rounded-full bg-ob-500"></span>
           <span id="lastRefresh">—</span>
         </div>
-        <button id="refreshDash" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">↻ Refresh</button>
+        <button id="refreshDash" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">↻</button>
       </div>
     </div>
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
@@ -134,7 +134,7 @@
       <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700 text-center">
         <div class="text-4xl mb-3">🔒</div>
         <h2 class="text-xl font-bold mb-1">Admin Access</h2>
-        <p class="text-sm text-slate-400 mb-4">Enter PIN to unlock admin tools.</p>
+        <p class="text-sm text-slate-400 mb-4">Enter PIN to manage materials, carriers, and edit bookings.</p>
         <input type="password" id="pinInput" maxlength="4" inputmode="numeric" class="w-full px-4 py-3 rounded-lg bg-slate-900 border border-slate-700 text-center text-2xl font-mono tracking-widest" placeholder="••••">
         <button id="pinSubmit" class="w-full mt-3 py-2.5 rounded-lg bg-ob-600 hover:bg-ob-700 font-semibold text-white">Unlock</button>
         <div id="pinError" class="hidden mt-2 text-xs text-red-400">Incorrect PIN</div>
@@ -144,16 +144,17 @@
       <div class="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div>
           <h2 class="text-2xl font-bold">Admin</h2>
-          <p class="text-sm text-slate-400">Manage materials, carriers, and bookings.</p>
+          <p class="text-sm text-slate-400">Manage materials, carriers, and edit bookings.</p>
         </div>
         <button id="adminLock" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">🔒 Lock</button>
       </div>
-      <div class="bg-ob-900/20 border border-ob-700 rounded-lg p-3 mb-5 text-sm text-ob-500">
-        ✓ Admin unlocked — "Edit" buttons now appear on all dashboard bookings.
+      <div class="bg-ob-900/30 border border-ob-700 rounded-lg p-3 mb-5 text-sm text-ob-500">
+        ✓ Admin mode active — tap any booking in the Yard Dashboard to edit.
       </div>
-      <div class="flex gap-1 border-b border-slate-800 mb-5">
-        <button class="admin-subtab px-4 py-2 text-sm font-semibold border-b-2 border-ob-500 text-slate-100" data-subtab="materials">Materials</button>
-        <button class="admin-subtab px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400" data-subtab="carriers">Carriers</button>
+      <div class="flex gap-1 border-b border-slate-800 mb-5 overflow-x-auto">
+        <button class="admin-subtab px-4 py-2 text-sm font-semibold border-b-2 border-ob-500 text-slate-100 whitespace-nowrap" data-subtab="materials">Materials</button>
+        <button class="admin-subtab px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 whitespace-nowrap" data-subtab="carriers">Carriers</button>
+        <button class="admin-subtab px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 whitespace-nowrap" data-subtab="scorecard">📊 Scorecards</button>
       </div>
       <div id="adminMaterials" class="admin-subpanel">
         <div class="bg-slate-800 rounded-lg p-4 border border-slate-700 mb-4">
@@ -180,20 +181,27 @@
         </div>
         <div id="carList" class="space-y-1"></div>
       </div>
+      <div id="adminScorecard" class="admin-subpanel hidden">
+        <div class="bg-slate-800 rounded-lg p-4 border border-slate-700 mb-4">
+          <h3 class="text-sm font-bold mb-2 text-slate-300">📊 Carrier Performance — Last 30 Days</h3>
+          <p class="text-xs text-slate-500">On-time percentage based on scheduled vs actual arrival. ±10 min window counts as on-time.</p>
+        </div>
+        <div id="scoreList" class="space-y-2"></div>
+      </div>
     </div>
   </section>
 
   <section id="settingsTab" class="tab-content hidden">
     <h2 class="text-2xl font-bold mb-2">Settings</h2>
-    <p class="text-sm text-slate-400 mb-4">Database credentials are built in.</p>
+    <p class="text-sm text-slate-400 mb-4">Database credentials are built in. These fields are only for rotating keys.</p>
     <div class="bg-slate-800 rounded-lg p-5 border border-slate-700 space-y-4 max-w-xl">
       <div>
         <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Supabase URL (override)</label>
-        <input id="supabaseUrl" class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 font-mono text-sm" placeholder="Leave blank for default">
+        <input id="supabaseUrl" class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 font-mono text-sm" placeholder="Leave blank to use default">
       </div>
       <div>
         <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Supabase Anon Key (override)</label>
-        <textarea id="supabaseKey" rows="3" class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 font-mono text-xs" placeholder="Leave blank for default"></textarea>
+        <textarea id="supabaseKey" rows="3" class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 font-mono text-xs" placeholder="Leave blank to use default"></textarea>
       </div>
       <div>
         <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Yard Hours</label>
@@ -260,7 +268,7 @@
       </div>
       <div class="grid grid-cols-3 gap-3">
         <div>
-          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">PO # (opt)</label>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">PO #</label>
           <input id="modalPO" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
         </div>
         <div>
@@ -276,7 +284,9 @@
         <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Notes (opt)</label>
         <textarea id="modalNotes" rows="2" class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm"></textarea>
       </div>
-      <button id="confirmBook" class="w-full py-3 rounded-lg bg-ob-600 hover:bg-ob-700 font-bold text-white disabled:opacity-50 disabled:cursor-not-allowed">Confirm Booking</button>
+      <button id="confirmBook" class="w-full py-3 rounded-lg bg-ob-600 hover:bg-ob-700 font-bold text-white disabled:opacity-50 disabled:cursor-not-allowed">
+        Confirm Booking
+      </button>
     </div>
   </div>
 </div>
@@ -295,11 +305,11 @@
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">BOL #</label>
-          <input id="completeBOL" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm" placeholder="289085">
+          <input id="completeBOL" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Release #</label>
-          <input id="completeRelease" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm" placeholder="52633">
+          <input id="completeRelease" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
         </div>
       </div>
       <div class="grid grid-cols-2 gap-3">
@@ -314,15 +324,11 @@
       </div>
       <div>
         <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">BOL Photo</label>
+        <input type="file" id="bolCameraInput" accept="image/*" capture="environment" class="hidden">
+        <input type="file" id="bolLibraryInput" accept="image/*" class="hidden">
         <div class="grid grid-cols-2 gap-2">
-          <input type="file" id="bolPhotoCamera" accept="image/*" capture="environment" class="hidden">
-          <input type="file" id="bolPhotoLibrary" accept="image/*" class="hidden">
-          <button id="bolCameraBtn" class="py-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 border-dashed text-sm font-semibold">
-            📷 Take Photo
-          </button>
-          <button id="bolLibraryBtn" class="py-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 border-dashed text-sm font-semibold">
-            🖼️ Choose from Library
-          </button>
+          <button id="bolCameraBtn" class="py-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sm font-semibold">📷 Take Photo</button>
+          <button id="bolLibraryBtn" class="py-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sm font-semibold">🖼️ From Library</button>
         </div>
         <div id="bolPhotoPreview" class="hidden mt-3">
           <img id="bolPhotoPreviewImg" class="w-full rounded-lg border border-slate-700" alt="BOL preview">
@@ -330,18 +336,20 @@
         </div>
         <div id="bolUploadProgress" class="hidden mt-2 text-xs text-slate-400">Uploading…</div>
       </div>
-      <button id="confirmComplete" class="w-full py-3 rounded-lg bg-ob-600 hover:bg-ob-700 font-bold text-white disabled:opacity-50">Mark Complete</button>
+      <button id="confirmComplete" class="w-full py-3 rounded-lg bg-ob-600 hover:bg-ob-700 font-bold text-white disabled:opacity-50">
+        Mark Complete
+      </button>
     </div>
   </div>
 </div>
 
-<!-- EDIT MODAL (ADMIN) -->
+<!-- EDIT BOOKING MODAL -->
 <div id="editModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-end md:items-center justify-center p-0 md:p-4">
-  <div class="bg-slate-900 w-full md:max-w-lg rounded-t-2xl md:rounded-2xl border-t md:border border-slate-700 max-h-[95vh] overflow-y-auto">
+  <div class="bg-slate-900 w-full md:max-w-md rounded-t-2xl md:rounded-2xl border-t md:border border-slate-700 max-h-[95vh] overflow-y-auto">
     <div class="p-5 border-b border-slate-800 flex items-center justify-between sticky top-0 bg-slate-900 z-10">
       <div>
-        <h3 class="text-lg font-bold">Edit Booking</h3>
-        <p id="editModalSummary" class="text-xs text-slate-400">—</p>
+        <h3 class="text-lg font-bold">✏️ Edit Booking</h3>
+        <p id="editModalId" class="text-xs text-slate-500 font-mono">—</p>
       </div>
       <button id="closeEditModal" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center">✕</button>
     </div>
@@ -349,33 +357,19 @@
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Date</label>
-          <input type="date" id="editDate" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm">
+          <input id="editDate" type="date" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm">
         </div>
         <div>
-          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Hour (0-23)</label>
-          <input type="number" min="0" max="23" id="editHour" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Hour Slot</label>
+          <select id="editHour" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm"></select>
         </div>
       </div>
       <div>
         <label class="block text-xs font-semibold text-slate-400 uppercase mb-2">Direction</label>
         <div class="grid grid-cols-2 gap-2">
-          <button class="edit-dir-btn py-2.5 rounded-lg border-2 border-slate-700 font-semibold text-sm" data-dir="outbound">
-            <span class="text-ob-500">OUTBOUND</span>
-          </button>
-          <button class="edit-dir-btn py-2.5 rounded-lg border-2 border-slate-700 font-semibold text-sm" data-dir="inbound">
-            <span class="text-ib-500">INBOUND</span>
-          </button>
+          <button class="edit-dir-btn py-2.5 rounded-lg border-2 border-slate-700 font-semibold text-sm" data-dir="outbound"><span class="text-ob-500">OUTBOUND</span></button>
+          <button class="edit-dir-btn py-2.5 rounded-lg border-2 border-slate-700 font-semibold text-sm" data-dir="inbound"><span class="text-ib-500">INBOUND</span></button>
         </div>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Status</label>
-        <select id="editStatus" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700">
-          <option value="booked">Booked</option>
-          <option value="arrived">Arrived (On Site)</option>
-          <option value="completed">Completed</option>
-          <option value="cancelled">Cancelled</option>
-          <option value="no_show">No Show</option>
-        </select>
       </div>
       <div>
         <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Material</label>
@@ -409,27 +403,34 @@
           <input id="editTrailer" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
         </div>
       </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Status</label>
+          <select id="editStatus" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm">
+            <option value="booked">Booked</option>
+            <option value="arrived">On Site (Arrived)</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+            <option value="no_show">No Show</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Arrival Type</label>
+          <select id="editArrivalType" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm">
+            <option value="">— None —</option>
+            <option value="early">⏪ Early</option>
+            <option value="on_time">✓ On Time</option>
+            <option value="late">⏩ Late</option>
+          </select>
+        </div>
+      </div>
       <div>
         <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Notes</label>
-        <textarea id="editNotes" rows="2" class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm"></textarea>
+        <textarea id="editNotes" rows="3" class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm"></textarea>
       </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">BOL Photo</label>
-        <div class="grid grid-cols-2 gap-2">
-          <input type="file" id="editPhotoCamera" accept="image/*" capture="environment" class="hidden">
-          <input type="file" id="editPhotoLibrary" accept="image/*" class="hidden">
-          <button id="editCameraBtn" class="py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 border-dashed text-sm font-semibold">📷 Take Photo</button>
-          <button id="editLibraryBtn" class="py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 border-dashed text-sm font-semibold">🖼️ Choose from Library</button>
-        </div>
-        <div id="editPhotoPreview" class="hidden mt-3">
-          <img id="editPhotoPreviewImg" class="w-full rounded-lg border border-slate-700" alt="BOL preview">
-          <button id="editRemovePhoto" class="mt-2 text-xs text-red-400 hover:text-red-300">Remove photo</button>
-        </div>
-        <div id="editUploadProgress" class="hidden mt-2 text-xs text-slate-400">Uploading…</div>
-      </div>
-      <div class="flex gap-2 pt-3 border-t border-slate-800">
-        <button id="editDelete" class="px-4 py-3 rounded-lg bg-red-900/50 hover:bg-red-900 text-red-300 font-bold text-sm">🗑️ Delete</button>
+      <div class="flex gap-2 pt-2">
         <button id="editSave" class="flex-1 py-3 rounded-lg bg-ob-600 hover:bg-ob-700 font-bold text-white">Save Changes</button>
+        <button id="editDelete" class="px-4 py-3 rounded-lg bg-red-900/50 hover:bg-red-900 font-bold text-red-300 text-sm">🗑️</button>
       </div>
     </div>
   </div>
@@ -452,6 +453,7 @@ const DEFAULT_END_HOUR   = 17;
 const ADMIN_PIN = '2828';
 const BOL_BUCKET = 'bol-photos';
 const ADD_NEW_MATERIAL = '__ADD_NEW__';
+const ON_TIME_WINDOW_MIN = 10;  // ±10 min = on time
 
 const App = {
     state: {
@@ -469,10 +471,9 @@ const App = {
         materials:    [],
         carriers:     [],
         completingBooking: null,
-        pendingBolPhoto: null,
         editingBooking: null,
-        editDir: null,
-        editPendingPhoto: null,
+        editingDir: null,
+        pendingBolPhoto: null,
     },
 
     init() {
@@ -482,24 +483,22 @@ const App = {
         this.loadMaterials();
         this.loadCarriers();
         this.loadSchedule();
-        setInterval(() => {
-            if (this.state.activeTab === 'dashboard') this.loadSchedule();
-        }, 30000);
+        setInterval(() => { if (this.state.activeTab === 'dashboard') this.loadSchedule(); }, 30000);
     },
 
     loadConfig() {
-        const storedUrl = localStorage.getItem('dalmex_sb_url');
-        const storedKey = localStorage.getItem('dalmex_sb_key');
+        const storedUrl   = localStorage.getItem('dalmex_sb_url');
+        const storedKey   = localStorage.getItem('dalmex_sb_key');
         const storedStart = localStorage.getItem('dalmex_start_hr');
-        const storedEnd = localStorage.getItem('dalmex_end_hr');
+        const storedEnd   = localStorage.getItem('dalmex_end_hr');
         this.state.supabaseUrl = storedUrl || DEFAULT_SUPABASE_URL;
         this.state.supabaseKey = storedKey || DEFAULT_SUPABASE_KEY;
-        this.state.startHour = storedStart ? parseInt(storedStart, 10) : DEFAULT_START_HOUR;
-        this.state.endHour = storedEnd ? parseInt(storedEnd, 10) : DEFAULT_END_HOUR;
+        this.state.startHour   = storedStart ? parseInt(storedStart, 10) : DEFAULT_START_HOUR;
+        this.state.endHour     = storedEnd   ? parseInt(storedEnd, 10)   : DEFAULT_END_HOUR;
         document.getElementById('supabaseUrl').value = storedUrl || '';
         document.getElementById('supabaseKey').value = storedKey || '';
-        document.getElementById('startHour').value = this.state.startHour;
-        document.getElementById('endHour').value = this.state.endHour;
+        document.getElementById('startHour').value   = this.state.startHour;
+        document.getElementById('endHour').value     = this.state.endHour;
         this.updateConnStatus();
     },
 
@@ -526,7 +525,6 @@ const App = {
     resetConfig() {
         ['dalmex_sb_url','dalmex_sb_key','dalmex_start_hr','dalmex_end_hr'].forEach(k => localStorage.removeItem(k));
         this.loadConfig();
-        document.getElementById('settingsStatus').textContent = '✓ Reset';
         this.toast('Reset to defaults', 'success');
         this.loadSchedule();
     },
@@ -632,9 +630,10 @@ const App = {
 
     renderSlotGrid() {
         const grid = document.getElementById('slotGrid');
+        const date = this.state.activeDate;
         const slots = [];
         for (let h = this.state.startHour; h < this.state.endHour; h++) {
-            slots.push({ hour: h, iso: this.localIsoForHour(this.state.activeDate, h) });
+            slots.push({ hour: h, iso: this.localIsoForHour(date, h) });
         }
         grid.innerHTML = slots.map(s => {
             const booking = this.state.schedule.find(r =>
@@ -642,7 +641,7 @@ const App = {
                 r.status !== 'cancelled' && r.status !== 'no_show'
             );
             const hourLabel = this.formatHour(s.hour);
-            const hourEnd = this.formatHour(s.hour + 1);
+            const hourEnd   = this.formatHour(s.hour + 1);
             if (!booking) {
                 return `
                 <button class="slot-btn p-4 rounded-xl bg-slate-800 border border-slate-700 hover:border-ob-500 text-left" data-slot="${s.iso}">
@@ -656,8 +655,12 @@ const App = {
                       : booking.direction === 'outbound' ? 'slot-booked-ob' : 'slot-booked-ib';
             const dirLabel = booking.direction === 'outbound' ? 'OUTBOUND' : 'INBOUND';
             const dirColor = booking.direction === 'outbound' ? 'text-ob-500' : 'text-ib-500';
-            const statusLabel = booking.status === 'arrived' ? '🟡 ON SITE'
-                              : booking.status === 'completed' ? '✓ DONE' : '📋 BOOKED';
+            let statusLabel = '📋 BOOKED';
+            if (booking.status === 'arrived') {
+                statusLabel = booking.arrival_type === 'late' ? '⏩ LATE'
+                            : booking.arrival_type === 'early' ? '⏪ EARLY'
+                            : '🟡 ON SITE';
+            } else if (booking.status === 'completed') statusLabel = '✓ DONE';
             return `
             <div class="slot-btn p-4 rounded-xl border-2 ${cls}">
                 <div class="flex justify-between items-start">
@@ -714,16 +717,32 @@ const App = {
     renderMaterialDropdown() {
         const sel = document.getElementById('modalMaterial');
         if (!this.state.selectedDir) { sel.innerHTML = '<option value="">-- Select direction first --</option>'; return; }
-        const items = this.state.materials.filter(m => m.active && (m.direction === this.state.selectedDir || m.direction === 'both'));
-        sel.innerHTML =
-            '<option value="">-- Select material --</option>' +
+        const items = this.state.materials.filter(m =>
+            m.active && (m.direction === this.state.selectedDir || m.direction === 'both')
+        );
+        sel.innerHTML = '<option value="">-- Select material --</option>' +
             items.map(m => `<option value="${this.esc(m.name)}">${this.esc(m.name)}</option>`).join('') +
             `<option value="${ADD_NEW_MATERIAL}">➕ Add new material…</option>`;
     },
 
+    renderEditMaterialDropdown() {
+        const sel = document.getElementById('editMaterial');
+        if (!this.state.editingDir) { sel.innerHTML = '<option value="">-- Select direction --</option>'; return; }
+        const items = this.state.materials.filter(m =>
+            m.active && (m.direction === this.state.editingDir || m.direction === 'both')
+        );
+        const current = this.state.editingBooking ? this.state.editingBooking.material : '';
+        const hasCurrent = items.some(m => m.name === current);
+        let html = '<option value="">-- Select material --</option>' +
+            items.map(m => `<option value="${this.esc(m.name)}">${this.esc(m.name)}</option>`).join('');
+        if (current && !hasCurrent) html += `<option value="${this.esc(current)}">${this.esc(current)} (archived)</option>`;
+        sel.innerHTML = html;
+        sel.value = current;
+    },
+
     renderCarrierDatalist() {
-        document.getElementById('carrierList').innerHTML = this.state.carriers.filter(c => c.active)
-            .map(c => `<option value="${this.esc(c.name)}">`).join('');
+        document.getElementById('carrierList').innerHTML = this.state.carriers
+            .filter(c => c.active).map(c => `<option value="${this.esc(c.name)}">`).join('');
     },
 
     async handleMaterialChange() {
@@ -732,16 +751,26 @@ const App = {
             const name = prompt('New material name:');
             if (!name || !name.trim()) { sel.value = ''; this.updateConfirmBtn(); return; }
             const trimmed = name.trim();
-            const existing = this.state.materials.find(m => m.name.toLowerCase() === trimmed.toLowerCase() && (m.direction === this.state.selectedDir || m.direction === 'both'));
-            if (existing) { sel.value = existing.name; this.toast('Already exists — selected it', 'info'); this.updateConfirmBtn(); return; }
-            const res = await this.supabase('materials', 'POST', { name: trimmed, direction: this.state.selectedDir, sort_order: 500 });
+            const existing = this.state.materials.find(m =>
+                m.name.toLowerCase() === trimmed.toLowerCase() &&
+                (m.direction === this.state.selectedDir || m.direction === 'both')
+            );
+            if (existing) {
+                sel.value = existing.name;
+                this.toast('Already exists — selected', 'info');
+                this.updateConfirmBtn();
+                return;
+            }
+            const res = await this.supabase('materials', 'POST', {
+                name: trimmed, direction: this.state.selectedDir, sort_order: 500,
+            });
             if (res && res.length) {
                 this.toast('✓ Material added', 'success');
                 await this.loadMaterials();
                 document.getElementById('modalMaterial').value = trimmed;
             } else {
                 sel.value = '';
-                this.toast('Failed to add material', 'error');
+                this.toast('Failed to add', 'error');
             }
         }
         this.updateConfirmBtn();
@@ -750,7 +779,8 @@ const App = {
     updateConfirmBtn() {
         const mat = document.getElementById('modalMaterial').value.trim();
         const car = document.getElementById('modalCarrier').value.trim();
-        document.getElementById('confirmBook').disabled = !(this.state.selectedDir && mat && mat !== ADD_NEW_MATERIAL && car);
+        const validMat = mat && mat !== ADD_NEW_MATERIAL;
+        document.getElementById('confirmBook').disabled = !(this.state.selectedDir && validMat && car);
     },
 
     async confirmBooking() {
@@ -758,25 +788,26 @@ const App = {
         btn.disabled = true;
         btn.textContent = 'Booking…';
         const payload = {
-            time: this.state.selectedSlot,
-            direction: this.state.selectedDir,
-            material: document.getElementById('modalMaterial').value.trim(),
-            carrier: document.getElementById('modalCarrier').value.trim(),
-            bol_number: document.getElementById('modalBOL').value.trim() || null,
+            time:           this.state.selectedSlot,
+            direction:      this.state.selectedDir,
+            material:       document.getElementById('modalMaterial').value.trim(),
+            carrier:        document.getElementById('modalCarrier').value.trim(),
+            bol_number:     document.getElementById('modalBOL').value.trim() || null,
             release_number: document.getElementById('modalRelease').value.trim() || null,
-            po_number: document.getElementById('modalPO').value.trim() || null,
-            truck_id: document.getElementById('modalTruck').value.trim() || null,
-            trailer_id: document.getElementById('modalTrailer').value.trim() || null,
-            notes: document.getElementById('modalNotes').value.trim() || null,
-            status: 'booked',
+            po_number:      document.getElementById('modalPO').value.trim() || null,
+            truck_id:       document.getElementById('modalTruck').value.trim() || null,
+            trailer_id:     document.getElementById('modalTrailer').value.trim() || null,
+            notes:          document.getElementById('modalNotes').value.trim() || null,
+            status:         'booked',
         };
         payload.booking_hash = await this.generateBookingHash(payload);
         const res = await this.supabase('schedule', 'POST', payload);
         btn.disabled = false;
         btn.textContent = 'Confirm Booking';
         if (res && res.length) {
-            if (payload.carrier && !this.state.carriers.find(c => c.name.toLowerCase() === payload.carrier.toLowerCase())) {
-                await this.supabase('carriers', 'POST', { name: payload.carrier, sort_order: 500 });
+            const carName = payload.carrier;
+            if (carName && !this.state.carriers.find(c => c.name.toLowerCase() === carName.toLowerCase())) {
+                await this.supabase('carriers', 'POST', { name: carName, sort_order: 500 });
                 this.loadCarriers();
             }
             this.toast('✓ Booking confirmed', 'success');
@@ -788,9 +819,32 @@ const App = {
         }
     },
 
+    // ─── SMART ARRIVAL DETECTION ─────────────────────────────
+    detectArrivalType(scheduledTime, actualTime) {
+        const scheduled = new Date(scheduledTime).getTime();
+        const actual = new Date(actualTime).getTime();
+        const diffMin = Math.round((actual - scheduled) / 60000);
+        let type;
+        if (diffMin < -ON_TIME_WINDOW_MIN) type = 'early';
+        else if (diffMin > ON_TIME_WINDOW_MIN) type = 'late';
+        else type = 'on_time';
+        return { type, diffMin };
+    },
+
+    buildArrivalNote(type, diffMin, existingNotes) {
+        if (type === 'on_time') return existingNotes;  // don't add a note for on-time
+        let addition;
+        if (type === 'late') addition = `Arrived ${diffMin} min late`;
+        else if (type === 'early') addition = `Arrived ${Math.abs(diffMin)} min early`;
+        if (!existingNotes || !existingNotes.trim()) return addition;
+        if (existingNotes.includes(addition)) return existingNotes;  // don't duplicate
+        return existingNotes + ' · ' + addition;
+    },
+
     renderDashboard() {
         const today = this.state.activeDate;
-        const rows = this.state.schedule.filter(r => r.time.slice(0,10) === today).sort((a,b) => new Date(a.time) - new Date(b.time));
+        const rows = this.state.schedule.filter(r => r.time.slice(0,10) === today)
+            .sort((a,b) => new Date(a.time) - new Date(b.time));
         let ob=0, ib=0, arrived=0, done=0;
         rows.forEach(r => {
             if (r.status === 'cancelled' || r.status === 'no_show') return;
@@ -803,21 +857,21 @@ const App = {
         document.getElementById('statArrived').textContent = arrived;
         document.getElementById('statDone').textContent = done;
 
-        document.getElementById('adminIndicator').classList.toggle('hidden', !this.state.adminUnlocked);
+        document.getElementById('dashSubtitle').textContent = this.state.adminUnlocked
+            ? '✏️ Admin mode — tap Edit on any booking'
+            : 'Mark trucks as arrived or completed.';
 
         const list = document.getElementById('dashList');
         const empty = document.getElementById('dashEmpty');
         if (!rows.length) { list.innerHTML=''; empty.classList.remove('hidden'); return; }
         empty.classList.add('hidden');
 
-        const isAdmin = this.state.adminUnlocked;
-
         list.innerHTML = rows.map(r => {
             const t = new Date(r.time);
             const hourLabel = this.formatHour(t.getHours());
             const hourEnd = this.formatHour(t.getHours() + 1);
             const dirColor = r.direction === 'outbound' ? 'bg-ob-500' : 'bg-ib-500';
-            const dirText = r.direction === 'outbound' ? 'text-ob-500' : 'text-ib-500';
+            const dirText  = r.direction === 'outbound' ? 'text-ob-500' : 'text-ib-500';
             const dirLabel = r.direction === 'outbound' ? 'OUTBOUND' : 'INBOUND';
             let statusBadge, actionBtns;
             if (r.status === 'booked') {
@@ -826,32 +880,39 @@ const App = {
                     <button class="act-btn px-3 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold" data-id="${r.id}" data-action="arrived">Mark Arrived</button>
                     <button class="act-btn px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold" data-id="${r.id}" data-action="cancelled">Cancel</button>`;
             } else if (r.status === 'arrived') {
-                statusBadge = '<span class="px-2 py-0.5 rounded-full bg-amber-600 text-white text-xs font-bold pulse-dot">ON SITE</span>';
+                let badgeColor = 'bg-amber-600';
+                let badgeIcon = 'ON SITE';
+                if (r.arrival_type === 'late') { badgeColor = 'bg-red-600'; badgeIcon = '⏩ LATE'; }
+                else if (r.arrival_type === 'early') { badgeColor = 'bg-blue-600'; badgeIcon = '⏪ EARLY'; }
+                else if (r.arrival_type === 'on_time') { badgeColor = 'bg-ob-600'; badgeIcon = '✓ ON TIME'; }
+                statusBadge = `<span class="px-2 py-0.5 rounded-full ${badgeColor} text-white text-xs font-bold pulse-dot">${badgeIcon}</span>`;
                 actionBtns = `
                     <button class="act-btn px-3 py-2 rounded-lg bg-ob-600 hover:bg-ob-700 text-white text-xs font-bold" data-id="${r.id}" data-action="complete">Mark Complete</button>
                     <button class="act-btn px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold" data-id="${r.id}" data-action="booked">Undo</button>`;
             } else if (r.status === 'completed') {
-                statusBadge = '<span class="px-2 py-0.5 rounded-full bg-ob-700 text-white text-xs font-bold">COMPLETED</span>';
+                let label = 'COMPLETED';
+                if (r.arrival_type === 'late') label = 'DONE · LATE';
+                else if (r.arrival_type === 'early') label = 'DONE · EARLY';
+                else if (r.arrival_type === 'on_time') label = 'DONE · ON TIME';
+                statusBadge = `<span class="px-2 py-0.5 rounded-full bg-ob-700 text-white text-xs font-bold">${label}</span>`;
                 actionBtns = `<button class="act-btn px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold" data-id="${r.id}" data-action="complete">Edit BOL</button>
                               <button class="act-btn px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold" data-id="${r.id}" data-action="arrived">Reopen</button>`;
             } else {
                 statusBadge = `<span class="px-2 py-0.5 rounded-full bg-red-900/50 text-red-300 text-xs font-semibold">${r.status.toUpperCase()}</span>`;
                 actionBtns = `<button class="act-btn px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold" data-id="${r.id}" data-action="booked">Restore</button>`;
             }
-            // Admin edit button (separate)
-            const adminBtn = isAdmin
-                ? `<button class="edit-btn px-3 py-2 rounded-lg bg-ob-900/40 hover:bg-ob-900 text-ob-500 text-xs font-bold border border-ob-700" data-id="${r.id}">✏️ Edit</button>`
-                : '';
-
             const bolBits = [];
-            if (r.bol_number) bolBits.push(`BOL ${this.esc(r.bol_number)}`);
-            if (r.release_number) bolBits.push(`Rel ${this.esc(r.release_number)}`);
-            if (r.po_number) bolBits.push(`PO ${this.esc(r.po_number)}`);
-            if (r.truck_id) bolBits.push(`Truck ${this.esc(r.truck_id)}`);
-            if (r.trailer_id) bolBits.push(`Trlr ${this.esc(r.trailer_id)}`);
-            const bolLine = bolBits.length ? `<div class="text-xs text-slate-500 mt-1 font-mono">${bolBits.join(' · ')}</div>` : '';
+            if (r.bol_number)     bolBits.push(`<span class="copyable" data-copy="${this.esc(r.bol_number)}" title="Tap to copy">📋 BOL ${this.esc(r.bol_number)}</span>`);
+            if (r.release_number) bolBits.push(`<span class="copyable" data-copy="${this.esc(r.release_number)}" title="Tap to copy">Rel ${this.esc(r.release_number)}</span>`);
+            if (r.po_number)      bolBits.push(`<span class="copyable" data-copy="${this.esc(r.po_number)}" title="Tap to copy">PO ${this.esc(r.po_number)}</span>`);
+            if (r.truck_id)       bolBits.push(`Truck ${this.esc(r.truck_id)}`);
+            if (r.trailer_id)     bolBits.push(`Trlr ${this.esc(r.trailer_id)}`);
+            const bolLine = bolBits.length ? `<div class="text-xs text-slate-500 mt-1 font-mono flex gap-3 flex-wrap">${bolBits.join('<span class="text-slate-700">·</span>')}</div>` : '';
             const photoThumb = r.bol_photo_url
                 ? `<img src="${this.esc(r.bol_photo_url)}" class="bol-thumb w-14 h-14 rounded-lg border border-slate-600 object-cover cursor-pointer" data-photo="${this.esc(r.bol_photo_url)}" alt="BOL">`
+                : '';
+            const editBadge = this.state.adminUnlocked
+                ? `<button class="edit-booking-btn text-xs text-slate-500 hover:text-ob-500" data-id="${r.id}">✏️ Edit</button>`
                 : '';
             return `
             <div class="bg-slate-800 rounded-lg p-4 border border-slate-700 flex items-center gap-4 flex-wrap">
@@ -864,6 +925,7 @@ const App = {
                     <div class="flex items-center gap-2 flex-wrap">
                         <span class="font-bold ${dirText} text-xs">${dirLabel}</span>
                         ${statusBadge}
+                        ${editBadge}
                     </div>
                     <div class="font-semibold mt-1">${this.esc(r.carrier)}</div>
                     <div class="text-sm text-slate-400">${this.esc(r.material)}</div>
@@ -871,19 +933,20 @@ const App = {
                     ${r.notes ? `<div class="text-xs text-slate-500 mt-1 italic">"${this.esc(r.notes)}"</div>` : ''}
                 </div>
                 ${photoThumb}
-                <div class="flex gap-2 flex-wrap">${actionBtns} ${adminBtn}</div>
+                <div class="flex gap-2 flex-wrap">${actionBtns}</div>
             </div>`;
         }).join('');
 
         list.querySelectorAll('.act-btn').forEach(b => {
-            b.addEventListener('click', () => {
+            b.addEventListener('click', (e) => {
+                e.stopPropagation();
                 const id = b.dataset.id, action = b.dataset.action;
                 if (action === 'complete') this.openCompleteModal(id);
                 else this.updateStatus(id, action);
             });
         });
-        list.querySelectorAll('.edit-btn').forEach(b => {
-            b.addEventListener('click', () => this.openEditModal(b.dataset.id));
+        list.querySelectorAll('.edit-booking-btn').forEach(b => {
+            b.addEventListener('click', e => { e.stopPropagation(); this.openEditModal(b.dataset.id); });
         });
         list.querySelectorAll('[data-photo]').forEach(img => {
             img.addEventListener('click', e => {
@@ -892,18 +955,49 @@ const App = {
                 document.getElementById('photoViewer').classList.remove('hidden');
             });
         });
+        list.querySelectorAll('.copyable').forEach(el => {
+            el.addEventListener('click', e => {
+                e.stopPropagation();
+                const val = el.dataset.copy;
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(val).then(() => this.toast(`Copied: ${val}`, 'success'));
+                } else {
+                    this.toast(`Copy: ${val}`, 'info');
+                }
+            });
+        });
         document.getElementById('lastRefresh').textContent = 'Updated ' + new Date().toLocaleTimeString();
     },
 
     async updateStatus(id, newStatus) {
+        const booking = this.state.schedule.find(r => String(r.id) === String(id));
+        if (!booking) return;
         const patch = { status: newStatus };
-        if (newStatus === 'arrived') patch.arrived_at = new Date().toISOString();
-        if (newStatus === 'booked') { patch.arrived_at = null; patch.completed_at = null; }
+        if (newStatus === 'arrived') {
+            const now = new Date().toISOString();
+            patch.arrived_at = now;
+            const { type, diffMin } = this.detectArrivalType(booking.time, now);
+            patch.arrival_type = type;
+            const newNote = this.buildArrivalNote(type, diffMin, booking.notes);
+            if (newNote !== booking.notes) patch.notes = newNote;
+        }
+        if (newStatus === 'booked') {
+            patch.arrived_at = null;
+            patch.completed_at = null;
+            patch.arrival_type = null;
+        }
         const res = await this.supabase(`schedule?id=eq.${id}`, 'PATCH', patch);
-        if (res) { this.toast(`Status → ${newStatus.toUpperCase()}`, 'success'); await this.loadSchedule(); }
+        if (res) {
+            if (newStatus === 'arrived' && patch.arrival_type) {
+                const label = patch.arrival_type === 'late' ? '⏩ Late' : patch.arrival_type === 'early' ? '⏪ Early' : '✓ On Time';
+                this.toast(`Arrived — ${label}`, 'success');
+            } else {
+                this.toast(`Status → ${newStatus.toUpperCase()}`, 'success');
+            }
+            await this.loadSchedule();
+        }
     },
 
-    // ─── COMPLETE MODAL ─────────────────────────────────────
     openCompleteModal(bookingId) {
         const booking = this.state.schedule.find(r => String(r.id) === String(bookingId));
         if (!booking) return;
@@ -918,12 +1012,10 @@ const App = {
         if (booking.bol_photo_url) {
             document.getElementById('bolPhotoPreviewImg').src = booking.bol_photo_url;
             preview.classList.remove('hidden');
-        } else {
-            preview.classList.add('hidden');
-        }
+        } else preview.classList.add('hidden');
         document.getElementById('bolUploadProgress').classList.add('hidden');
-        document.getElementById('bolPhotoCamera').value = '';
-        document.getElementById('bolPhotoLibrary').value = '';
+        document.getElementById('bolCameraInput').value = '';
+        document.getElementById('bolLibraryInput').value = '';
         document.getElementById('completeModal').classList.remove('hidden');
     },
 
@@ -933,8 +1025,7 @@ const App = {
         this.state.pendingBolPhoto = null;
     },
 
-    handleBolPhotoSelect(e) {
-        const file = e.target.files[0];
+    handleBolPhotoSelect(file) {
         if (!file) return;
         const previewUrl = URL.createObjectURL(file);
         document.getElementById('bolPhotoPreviewImg').src = previewUrl;
@@ -944,8 +1035,8 @@ const App = {
 
     removeBolPhoto() {
         this.state.pendingBolPhoto = null;
-        document.getElementById('bolPhotoCamera').value = '';
-        document.getElementById('bolPhotoLibrary').value = '';
+        document.getElementById('bolCameraInput').value = '';
+        document.getElementById('bolLibraryInput').value = '';
         document.getElementById('bolPhotoPreview').classList.add('hidden');
         if (this.state.completingBooking) {
             this.state.completingBooking.bol_photo_url = null;
@@ -967,14 +1058,17 @@ const App = {
             truck_id: document.getElementById('completeTruck').value.trim() || null,
             trailer_id: document.getElementById('completeTrailer').value.trim() || null,
         };
+        // If marking arrived directly (skipping arrive), still calc arrival type
+        if (!booking.arrival_type && booking.status !== 'arrived') {
+            const { type } = this.detectArrivalType(booking.time, patch.completed_at);
+            patch.arrival_type = type;
+            patch.arrived_at = booking.arrived_at || patch.completed_at;
+        }
         if (this.state.pendingBolPhoto) {
             document.getElementById('bolUploadProgress').classList.remove('hidden');
             const up = await this.uploadBolPhoto(this.state.pendingBolPhoto.file, booking.id);
             document.getElementById('bolUploadProgress').classList.add('hidden');
-            if (up) {
-                patch.bol_photo_url = up.publicUrl;
-                patch.bol_photo_path = up.path;
-            }
+            if (up) { patch.bol_photo_url = up.publicUrl; patch.bol_photo_path = up.path; }
         } else if (booking.bol_photo_url === null || booking.bol_photo_url === undefined) {
             patch.bol_photo_url = null;
             patch.bol_photo_path = null;
@@ -982,66 +1076,61 @@ const App = {
         const res = await this.supabase(`schedule?id=eq.${booking.id}`, 'PATCH', patch);
         btn.disabled = false;
         btn.textContent = 'Mark Complete';
-        if (res) { this.toast('✓ Load completed', 'success'); this.closeCompleteModal(); await this.loadSchedule(); }
+        if (res) {
+            this.toast('✓ Load completed', 'success');
+            this.closeCompleteModal();
+            await this.loadSchedule();
+        }
     },
 
-    // ─── EDIT MODAL (ADMIN) ─────────────────────────────────
+    // ─── EDIT MODAL ──────────────────────────────────────────
     openEditModal(bookingId) {
+        if (!this.state.adminUnlocked) { this.toast('Unlock admin first', 'error'); return; }
         const booking = this.state.schedule.find(r => String(r.id) === String(bookingId));
         if (!booking) return;
         this.state.editingBooking = booking;
-        this.state.editDir = booking.direction;
-        this.state.editPendingPhoto = null;
-
-        document.getElementById('editModalSummary').textContent = `ID ${booking.id} · ${booking.carrier}`;
-
-        const d = new Date(booking.time);
-        document.getElementById('editDate').value = booking.time.slice(0,10);
-        document.getElementById('editHour').value = d.getHours();
-        document.getElementById('editStatus').value = booking.status;
+        this.state.editingDir = booking.direction;
+        document.getElementById('editModalId').textContent = `ID: ${booking.id} · Created ${new Date(booking.created_at).toLocaleString()}`;
+        const t = new Date(booking.time);
+        document.getElementById('editDate').value = booking.time.slice(0, 10);
+        this.populateHourOptions(t.getHours());
+        document.getElementById('editHour').value = t.getHours();
+        document.querySelectorAll('.edit-dir-btn').forEach(b => {
+            b.classList.remove('border-ob-500', 'border-ib-500', 'bg-ob-900/30', 'bg-ib-900/30');
+            if (b.dataset.dir === booking.direction) {
+                if (booking.direction === 'outbound') b.classList.add('border-ob-500', 'bg-ob-900/30');
+                else b.classList.add('border-ib-500', 'bg-ib-900/30');
+            }
+        });
+        this.renderEditMaterialDropdown();
         document.getElementById('editCarrier').value = booking.carrier || '';
         document.getElementById('editBOL').value = booking.bol_number || '';
         document.getElementById('editRelease').value = booking.release_number || '';
         document.getElementById('editPO').value = booking.po_number || '';
         document.getElementById('editTruck').value = booking.truck_id || '';
         document.getElementById('editTrailer').value = booking.trailer_id || '';
+        document.getElementById('editStatus').value = booking.status;
+        document.getElementById('editArrivalType').value = booking.arrival_type || '';
         document.getElementById('editNotes').value = booking.notes || '';
-
-        this.setEditDirection(booking.direction);
-
-        // Ensure material dropdown contains the current value even if material was deleted
-        const sel = document.getElementById('editMaterial');
-        const items = this.state.materials.filter(m => m.active && (m.direction === booking.direction || m.direction === 'both'));
-        let opts = '<option value="">-- Select material --</option>' +
-            items.map(m => `<option value="${this.esc(m.name)}">${this.esc(m.name)}</option>`).join('');
-        if (booking.material && !items.find(m => m.name === booking.material)) {
-            opts += `<option value="${this.esc(booking.material)}">${this.esc(booking.material)} (legacy)</option>`;
-        }
-        sel.innerHTML = opts;
-        sel.value = booking.material || '';
-
-        const preview = document.getElementById('editPhotoPreview');
-        if (booking.bol_photo_url) {
-            document.getElementById('editPhotoPreviewImg').src = booking.bol_photo_url;
-            preview.classList.remove('hidden');
-        } else {
-            preview.classList.add('hidden');
-        }
-        document.getElementById('editUploadProgress').classList.add('hidden');
-        document.getElementById('editPhotoCamera').value = '';
-        document.getElementById('editPhotoLibrary').value = '';
         document.getElementById('editModal').classList.remove('hidden');
+    },
+
+    populateHourOptions(selected) {
+        let html = '';
+        for (let h = this.state.startHour; h < this.state.endHour; h++) {
+            html += `<option value="${h}" ${h===selected?'selected':''}>${this.formatHour(h)} – ${this.formatHour(h+1)}</option>`;
+        }
+        document.getElementById('editHour').innerHTML = html;
     },
 
     closeEditModal() {
         document.getElementById('editModal').classList.add('hidden');
         this.state.editingBooking = null;
-        this.state.editDir = null;
-        this.state.editPendingPhoto = null;
+        this.state.editingDir = null;
     },
 
-    setEditDirection(dir) {
-        this.state.editDir = dir;
+    selectEditDirection(dir) {
+        this.state.editingDir = dir;
         document.querySelectorAll('.edit-dir-btn').forEach(b => {
             b.classList.remove('border-ob-500', 'border-ib-500', 'bg-ob-900/30', 'bg-ib-900/30');
             if (b.dataset.dir === dir) {
@@ -1049,91 +1138,43 @@ const App = {
                 else b.classList.add('border-ib-500', 'bg-ib-900/30');
             }
         });
-        // Refresh material dropdown for new direction
-        const sel = document.getElementById('editMaterial');
-        const currentValue = sel.value;
-        const items = this.state.materials.filter(m => m.active && (m.direction === dir || m.direction === 'both'));
-        let opts = '<option value="">-- Select material --</option>' +
-            items.map(m => `<option value="${this.esc(m.name)}">${this.esc(m.name)}</option>`).join('');
-        if (currentValue && !items.find(m => m.name === currentValue)) {
-            opts += `<option value="${this.esc(currentValue)}">${this.esc(currentValue)} (legacy)</option>`;
-        }
-        sel.innerHTML = opts;
-        sel.value = currentValue;
+        this.renderEditMaterialDropdown();
     },
 
-    handleEditPhotoSelect(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-        const previewUrl = URL.createObjectURL(file);
-        document.getElementById('editPhotoPreviewImg').src = previewUrl;
-        document.getElementById('editPhotoPreview').classList.remove('hidden');
-        this.state.editPendingPhoto = { file, previewUrl };
-    },
-
-    removeEditPhoto() {
-        this.state.editPendingPhoto = null;
-        document.getElementById('editPhotoCamera').value = '';
-        document.getElementById('editPhotoLibrary').value = '';
-        document.getElementById('editPhotoPreview').classList.add('hidden');
-        if (this.state.editingBooking) {
-            this.state.editingBooking.bol_photo_url = null;
-            this.state.editingBooking.bol_photo_path = null;
-        }
-    },
-
-    async saveEditedBooking() {
+    async saveEdit() {
         const booking = this.state.editingBooking;
         if (!booking) return;
-        const btn = document.getElementById('editSave');
-        btn.disabled = true;
-        btn.textContent = 'Saving…';
-
-        const dateStr = document.getElementById('editDate').value;
+        const date = document.getElementById('editDate').value;
         const hour = parseInt(document.getElementById('editHour').value, 10);
-        const material = document.getElementById('editMaterial').value.trim();
-        const carrier = document.getElementById('editCarrier').value.trim();
-        const newStatus = document.getElementById('editStatus').value;
-
-        if (!dateStr || isNaN(hour) || hour < 0 || hour > 23) { this.toast('Invalid date/hour', 'error'); btn.disabled=false; btn.textContent='Save Changes'; return; }
-        if (!material || !carrier) { this.toast('Material and carrier required', 'error'); btn.disabled=false; btn.textContent='Save Changes'; return; }
-
-        const newTime = this.localIsoForHour(dateStr, hour);
-
+        const newTime = this.localIsoForHour(date, hour);
+        if (newTime !== booking.time) {
+            const collision = this.state.schedule.find(r =>
+                String(r.id) !== String(booking.id) &&
+                new Date(r.time).getTime() === new Date(newTime).getTime() &&
+                r.status !== 'cancelled' && r.status !== 'no_show'
+            );
+            if (collision) {
+                if (!confirm(`⚠️ Slot already booked by "${collision.carrier}" (${collision.material}).\n\nMove anyway?`)) return;
+            }
+        }
         const patch = {
             time: newTime,
-            direction: this.state.editDir,
-            status: newStatus,
-            material: material,
-            carrier: carrier,
+            direction: this.state.editingDir,
+            material: document.getElementById('editMaterial').value.trim(),
+            carrier: document.getElementById('editCarrier').value.trim(),
             bol_number: document.getElementById('editBOL').value.trim() || null,
             release_number: document.getElementById('editRelease').value.trim() || null,
             po_number: document.getElementById('editPO').value.trim() || null,
             truck_id: document.getElementById('editTruck').value.trim() || null,
             trailer_id: document.getElementById('editTrailer').value.trim() || null,
+            status: document.getElementById('editStatus').value,
+            arrival_type: document.getElementById('editArrivalType').value || null,
             notes: document.getElementById('editNotes').value.trim() || null,
         };
-
-        // Timestamp fields based on status
-        if (newStatus === 'arrived' && !booking.arrived_at) patch.arrived_at = new Date().toISOString();
-        if (newStatus === 'completed' && !booking.completed_at) patch.completed_at = new Date().toISOString();
-        if (newStatus === 'booked') { patch.arrived_at = null; patch.completed_at = null; }
-        if (newStatus === 'cancelled' || newStatus === 'no_show') { /* leave timestamps as-is */ }
-
-        // Handle photo
-        if (this.state.editPendingPhoto) {
-            document.getElementById('editUploadProgress').classList.remove('hidden');
-            const up = await this.uploadBolPhoto(this.state.editPendingPhoto.file, booking.id);
-            document.getElementById('editUploadProgress').classList.add('hidden');
-            if (up) {
-                patch.bol_photo_url = up.publicUrl;
-                patch.bol_photo_path = up.path;
-            }
-        } else if (booking.bol_photo_url === null || booking.bol_photo_url === undefined) {
-            patch.bol_photo_url = null;
-            patch.bol_photo_path = null;
-        }
-
+        if (!patch.material || !patch.carrier) { this.toast('Material and Carrier required', 'error'); return; }
+        const btn = document.getElementById('editSave');
+        btn.disabled = true;
+        btn.textContent = 'Saving…';
         const res = await this.supabase(`schedule?id=eq.${booking.id}`, 'PATCH', patch);
         btn.disabled = false;
         btn.textContent = 'Save Changes';
@@ -1147,7 +1188,7 @@ const App = {
     async deleteBooking() {
         const booking = this.state.editingBooking;
         if (!booking) return;
-        if (!confirm(`Permanently delete this booking?\n\n${booking.carrier} · ${booking.material}\n${new Date(booking.time).toLocaleString()}\n\nThis cannot be undone.`)) return;
+        if (!confirm(`⚠️ Delete this booking permanently?\n\n${booking.carrier} · ${booking.material}\n${new Date(booking.time).toLocaleString()}\n\nThis cannot be undone.`)) return;
         const res = await this.supabase(`schedule?id=eq.${booking.id}`, 'DELETE');
         if (res !== null) {
             this.toast('✓ Booking deleted', 'success');
@@ -1156,16 +1197,16 @@ const App = {
         }
     },
 
-    // ─── ADMIN PIN / SUBTABS ────────────────────────────────
+    // ─── ADMIN ───────────────────────────────────────────────
     trySubmitPin() {
-        if (document.getElementById('pinInput').value.trim() === ADMIN_PIN) {
+        const val = document.getElementById('pinInput').value.trim();
+        if (val === ADMIN_PIN) {
             this.state.adminUnlocked = true;
             document.getElementById('adminGate').classList.add('hidden');
             document.getElementById('adminContent').classList.remove('hidden');
             document.getElementById('pinError').classList.add('hidden');
             document.getElementById('pinInput').value = '';
             this.switchAdminSubtab(this.state.adminSubtab);
-            if (this.state.activeTab === 'dashboard') this.renderDashboard();
         } else {
             document.getElementById('pinError').classList.remove('hidden');
             document.getElementById('pinInput').value = '';
@@ -1176,7 +1217,6 @@ const App = {
         this.state.adminUnlocked = false;
         document.getElementById('adminGate').classList.remove('hidden');
         document.getElementById('adminContent').classList.add('hidden');
-        if (this.state.activeTab === 'dashboard') this.renderDashboard();
     },
 
     switchAdminSubtab(sub) {
@@ -1192,6 +1232,7 @@ const App = {
         document.querySelectorAll('.admin-subpanel').forEach(p => p.classList.add('hidden'));
         if (sub === 'materials') { document.getElementById('adminMaterials').classList.remove('hidden'); this.renderMaterialsAdmin(); }
         if (sub === 'carriers')  { document.getElementById('adminCarriers').classList.remove('hidden');  this.renderCarriersAdmin(); }
+        if (sub === 'scorecard') { document.getElementById('adminScorecard').classList.remove('hidden'); this.renderScorecard(); }
     },
 
     renderMaterialsAdmin() {
@@ -1205,8 +1246,7 @@ const App = {
         list.innerHTML = ['outbound','inbound','both'].filter(k => groups[k].length).map(k => {
             const label = k === 'outbound' ? 'OUTBOUND (Bales)' : k === 'inbound' ? 'INBOUND' : 'BOTH';
             const color = k === 'outbound' ? 'text-ob-500' : k === 'inbound' ? 'text-ib-500' : 'text-slate-400';
-            return `
-            <div class="mt-3 mb-1 text-xs font-bold uppercase tracking-wide ${color}">${label}</div>
+            return `<div class="mt-3 mb-1 text-xs font-bold uppercase tracking-wide ${color}">${label}</div>
             ${groups[k].map(m => `
                 <div class="bg-slate-800 rounded-lg p-3 border border-slate-700 flex items-center gap-3 ${m.active ? '' : 'inactive-row'}">
                     <div class="flex-1 font-semibold">${this.esc(m.name)}</div>
@@ -1282,6 +1322,59 @@ const App = {
         if (r !== null) { this.toast('✓ Deleted', 'success'); await this.loadCarriers(); }
     },
 
+    // ─── CARRIER SCORECARD ───────────────────────────────────
+    async renderScorecard() {
+        const list = document.getElementById('scoreList');
+        list.innerHTML = '<div class="text-center py-6 text-slate-500 text-sm">Loading…</div>';
+        const since = new Date();
+        since.setDate(since.getDate() - 30);
+        const rows = await this.supabase(
+            `schedule?arrival_type=not.is.null&time=gte.${since.toISOString()}&select=carrier,arrival_type,status`
+        );
+        if (!rows || !rows.length) {
+            list.innerHTML = '<div class="text-center py-8 text-slate-500 text-sm">No arrival data yet in last 30 days.<br><span class="text-xs">Once trucks are marked arrived, scorecards appear here.</span></div>';
+            return;
+        }
+        // Aggregate by carrier
+        const agg = {};
+        rows.forEach(r => {
+            if (!agg[r.carrier]) agg[r.carrier] = { total: 0, on_time: 0, early: 0, late: 0 };
+            agg[r.carrier].total++;
+            agg[r.carrier][r.arrival_type]++;
+        });
+        const sorted = Object.entries(agg).map(([name, s]) => ({
+            name, ...s,
+            onTimePct: (s.on_time / s.total) * 100,
+            earlyPct: (s.early / s.total) * 100,
+            latePct: (s.late / s.total) * 100,
+        })).sort((a,b) => b.onTimePct - a.onTimePct);
+
+        list.innerHTML = sorted.map(c => {
+            const gradeColor = c.onTimePct >= 85 ? 'text-ob-500' : c.onTimePct >= 70 ? 'text-amber-500' : 'text-red-400';
+            const grade = c.onTimePct >= 85 ? 'A' : c.onTimePct >= 70 ? 'B' : c.onTimePct >= 50 ? 'C' : 'D';
+            return `
+            <div class="bg-slate-800 rounded-lg p-4 border border-slate-700">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="font-bold">${this.esc(c.name)}</div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-2xl font-extrabold ${gradeColor}">${grade}</span>
+                        <span class="text-xs text-slate-500">${c.total} trips</span>
+                    </div>
+                </div>
+                <div class="flex h-2 rounded-full overflow-hidden bg-slate-900">
+                    <div class="bg-blue-500 score-bar" style="width: ${c.earlyPct}%"></div>
+                    <div class="bg-ob-500 score-bar" style="width: ${c.onTimePct}%"></div>
+                    <div class="bg-red-500 score-bar" style="width: ${c.latePct}%"></div>
+                </div>
+                <div class="flex justify-between mt-2 text-xs font-mono">
+                    <span class="text-blue-400">⏪ ${c.early} early (${c.earlyPct.toFixed(0)}%)</span>
+                    <span class="text-ob-500">✓ ${c.on_time} on-time (${c.onTimePct.toFixed(0)}%)</span>
+                    <span class="text-red-400">⏩ ${c.late} late (${c.latePct.toFixed(0)}%)</span>
+                </div>
+            </div>`;
+        }).join('');
+    },
+
     switchTab(tab) {
         this.state.activeTab = tab;
         document.querySelectorAll('.tab-btn').forEach(b => {
@@ -1308,12 +1401,15 @@ const App = {
 
     bindEvents() {
         document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => this.switchTab(b.dataset.tab)));
-
         document.getElementById('bookDate').addEventListener('change', e => { this.state.activeDate = e.target.value; this.loadSchedule(); });
         document.getElementById('prevDay').addEventListener('click', () => this.shiftDay(-1));
         document.getElementById('nextDay').addEventListener('click', () => this.shiftDay(1));
+        document.getElementById('todayBtn').addEventListener('click', () => {
+            this.state.activeDate = new Date().toISOString().slice(0,10);
+            document.getElementById('bookDate').value = this.state.activeDate;
+            this.loadSchedule();
+        });
 
-        // Booking modal
         document.getElementById('closeModal').addEventListener('click', () => this.closeBookModal());
         document.getElementById('bookModal').addEventListener('click', e => { if (e.target.id === 'bookModal') this.closeBookModal(); });
         document.querySelectorAll('.dir-btn').forEach(b => b.addEventListener('click', () => this.selectDirection(b.dataset.dir)));
@@ -1321,31 +1417,23 @@ const App = {
         document.getElementById('modalCarrier').addEventListener('input', () => this.updateConfirmBtn());
         document.getElementById('confirmBook').addEventListener('click', () => this.confirmBooking());
 
-        // Complete modal — NEW: dual photo buttons
         document.getElementById('closeCompleteModal').addEventListener('click', () => this.closeCompleteModal());
         document.getElementById('completeModal').addEventListener('click', e => { if (e.target.id === 'completeModal') this.closeCompleteModal(); });
-        document.getElementById('bolCameraBtn').addEventListener('click', () => document.getElementById('bolPhotoCamera').click());
-        document.getElementById('bolLibraryBtn').addEventListener('click', () => document.getElementById('bolPhotoLibrary').click());
-        document.getElementById('bolPhotoCamera').addEventListener('change', e => this.handleBolPhotoSelect(e));
-        document.getElementById('bolPhotoLibrary').addEventListener('change', e => this.handleBolPhotoSelect(e));
+        document.getElementById('bolCameraBtn').addEventListener('click', () => document.getElementById('bolCameraInput').click());
+        document.getElementById('bolLibraryBtn').addEventListener('click', () => document.getElementById('bolLibraryInput').click());
+        document.getElementById('bolCameraInput').addEventListener('change', e => this.handleBolPhotoSelect(e.target.files[0]));
+        document.getElementById('bolLibraryInput').addEventListener('change', e => this.handleBolPhotoSelect(e.target.files[0]));
         document.getElementById('removeBolPhoto').addEventListener('click', () => this.removeBolPhoto());
         document.getElementById('confirmComplete').addEventListener('click', () => this.confirmComplete());
 
-        // Edit modal
         document.getElementById('closeEditModal').addEventListener('click', () => this.closeEditModal());
         document.getElementById('editModal').addEventListener('click', e => { if (e.target.id === 'editModal') this.closeEditModal(); });
-        document.querySelectorAll('.edit-dir-btn').forEach(b => b.addEventListener('click', () => this.setEditDirection(b.dataset.dir)));
-        document.getElementById('editCameraBtn').addEventListener('click', () => document.getElementById('editPhotoCamera').click());
-        document.getElementById('editLibraryBtn').addEventListener('click', () => document.getElementById('editPhotoLibrary').click());
-        document.getElementById('editPhotoCamera').addEventListener('change', e => this.handleEditPhotoSelect(e));
-        document.getElementById('editPhotoLibrary').addEventListener('change', e => this.handleEditPhotoSelect(e));
-        document.getElementById('editRemovePhoto').addEventListener('click', () => this.removeEditPhoto());
-        document.getElementById('editSave').addEventListener('click', () => this.saveEditedBooking());
+        document.querySelectorAll('.edit-dir-btn').forEach(b => b.addEventListener('click', () => this.selectEditDirection(b.dataset.dir)));
+        document.getElementById('editSave').addEventListener('click', () => this.saveEdit());
         document.getElementById('editDelete').addEventListener('click', () => this.deleteBooking());
 
         document.getElementById('refreshDash').addEventListener('click', () => this.loadSchedule());
 
-        // Admin
         document.getElementById('pinSubmit').addEventListener('click', () => this.trySubmitPin());
         document.getElementById('pinInput').addEventListener('keypress', e => { if (e.key === 'Enter') this.trySubmitPin(); });
         document.getElementById('adminLock').addEventListener('click', () => this.lockAdmin());
@@ -1353,9 +1441,16 @@ const App = {
         document.getElementById('addMatBtn').addEventListener('click', () => this.addMaterial());
         document.getElementById('addCarBtn').addEventListener('click', () => this.addCarrier());
 
-        // Settings
         document.getElementById('saveSettings').addEventListener('click', () => this.saveConfig());
         document.getElementById('resetSettings').addEventListener('click', () => this.resetConfig());
+
+        // Keyboard shortcut: / focuses date picker
+        document.addEventListener('keydown', e => {
+            if (e.key === '/' && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) {
+                e.preventDefault();
+                document.getElementById('bookDate').focus();
+            }
+        });
     },
 
     shiftDay(delta) {
