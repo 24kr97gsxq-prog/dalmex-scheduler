@@ -211,6 +211,7 @@
       </div>
       <div class="flex gap-1 border-b border-slate-800 mb-5 overflow-x-auto">
         <button class="admin-subtab px-4 py-2 text-sm font-semibold border-b-2 border-ob-500 text-slate-100 whitespace-nowrap" data-subtab="customers">👥 Customers</button>
+        <button class="admin-subtab px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 whitespace-nowrap" data-subtab="trailers">🚛 Trailer Inventory</button>
         <button class="admin-subtab px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 whitespace-nowrap" data-subtab="materials">Materials</button>
         <button class="admin-subtab px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 whitespace-nowrap" data-subtab="carriers">Carriers</button>
         <button class="admin-subtab px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 whitespace-nowrap" data-subtab="scorecard">📊 Scorecards</button>
@@ -237,6 +238,36 @@
           <p class="text-xs text-slate-500 mt-2" id="custFilterSummary">—</p>
         </div>
         <div id="custList" class="space-y-2"></div>
+      </div>
+
+      <!-- ═══ TRAILER INVENTORY SUB-TAB (NEW in V3.1) ═══ -->
+      <div id="adminTrailers" class="admin-subpanel hidden">
+        <div class="bg-slate-800 rounded-lg p-4 border border-slate-700 mb-4">
+          <h3 class="text-sm font-bold mb-3 text-slate-300">Add Trailer</h3>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <input id="newTrlrId" type="text" placeholder="Trailer ID (e.g., 805)" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm font-mono">
+            <select id="newTrlrLoc" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm">
+              <option value="yard">📍 At Yard</option>
+              <option value="customer">👤 At Customer...</option>
+            </select>
+            <button id="addTrlrBtn" class="px-4 py-2 rounded bg-ob-600 hover:bg-ob-700 font-semibold text-sm text-white">+ Add Trailer</button>
+          </div>
+        </div>
+        <div class="grid grid-cols-3 gap-3 mb-4">
+          <div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
+            <div class="text-xs text-slate-400 uppercase">Total Trailers</div>
+            <div class="text-2xl font-bold text-slate-200 mt-1" id="trlrStatTotal">0</div>
+          </div>
+          <div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
+            <div class="text-xs text-slate-400 uppercase">At Yard</div>
+            <div class="text-2xl font-bold text-ob-500 mt-1" id="trlrStatYard">0</div>
+          </div>
+          <div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
+            <div class="text-xs text-slate-400 uppercase">At Customers</div>
+            <div class="text-2xl font-bold text-amber-500 mt-1" id="trlrStatOut">0</div>
+          </div>
+        </div>
+        <div id="trlrList" class="space-y-2"></div>
       </div>
 
       <div id="adminMaterials" class="admin-subpanel hidden">
@@ -361,6 +392,60 @@
             </div>
             <button id="clearSelCust" class="text-slate-500 hover:text-red-400 text-lg">✕</button>
           </div>
+        </div>
+      </div>
+
+      <!-- TRIP TYPE (appears when DMX carrier + customer selected) -->
+      <div id="modalTripTypeWrap" class="hidden">
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-2">Trip Type</label>
+        <div class="grid grid-cols-2 gap-2">
+          <button class="trip-btn py-2.5 rounded-lg border-2 border-slate-700 font-semibold text-sm" data-trip="delivery">
+            <div>🔵 DROP ONLY</div>
+            <div class="text-xs text-slate-400 font-normal mt-0.5">Drop & leave</div>
+          </button>
+          <button class="trip-btn py-2.5 rounded-lg border-2 border-slate-700 font-semibold text-sm" data-trip="pickup">
+            <div>🟢 PICKUP ONLY</div>
+            <div class="text-xs text-slate-400 font-normal mt-0.5">Load & return</div>
+          </button>
+          <button class="trip-btn py-2.5 rounded-lg border-2 border-slate-700 font-semibold text-sm" data-trip="round_trip">
+            <div>🔄 ROUND TRIP</div>
+            <div class="text-xs text-slate-400 font-normal mt-0.5">Wait while they load</div>
+          </button>
+          <button class="trip-btn py-2.5 rounded-lg border-2 border-slate-700 font-semibold text-sm" data-trip="swap">
+            <div>🔁 TRAILER SWAP</div>
+            <div class="text-xs text-slate-400 font-normal mt-0.5">Leave one, take another</div>
+          </button>
+        </div>
+      </div>
+
+      <!-- SWAP-SPECIFIC FIELDS -->
+      <div id="modalSwapFields" class="hidden bg-amber-900/20 border border-amber-900 rounded-lg p-3 space-y-3">
+        <div class="text-xs font-semibold text-amber-400 uppercase">🔁 Trailer Swap Details</div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Trailer to DROP (bring from yard)</label>
+          <select id="modalDropTrlr" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm font-mono">
+            <option value="">— Select trailer at yard —</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Trailer to PICK UP (return from customer)</label>
+          <select id="modalPickTrlr" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm font-mono">
+            <option value="">— Select trailer at this customer —</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Return Material (OCC etc.)</label>
+          <select id="modalPickMat" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm"></select>
+        </div>
+      </div>
+
+      <!-- ROUND TRIP FIELDS -->
+      <div id="modalRoundTripFields" class="hidden bg-blue-900/20 border border-blue-900 rounded-lg p-3 space-y-3">
+        <div class="text-xs font-semibold text-blue-400 uppercase">🔄 Round Trip Details</div>
+        <div class="text-xs text-slate-400">Same trailer drops and picks up. Driver waits while they unload & load.</div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Return Material (what they load)</label>
+          <select id="modalRoundMat" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm"></select>
         </div>
       </div>
 
@@ -679,6 +764,54 @@
   </div>
 </div>
 
+<!-- TRAILER EDIT MODAL (NEW in V3.1) -->
+<div id="trailerModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-end md:items-center justify-center p-0 md:p-4">
+  <div class="bg-slate-900 w-full md:max-w-md rounded-t-2xl md:rounded-2xl border-t md:border border-slate-700 max-h-[95vh] overflow-y-auto">
+    <div class="p-5 border-b border-slate-800 flex items-center justify-between sticky top-0 bg-slate-900 z-10">
+      <div>
+        <h3 class="text-lg font-bold" id="trailerModalTitle">Edit Trailer</h3>
+        <p id="trailerModalId" class="text-xs text-slate-500 font-mono">—</p>
+      </div>
+      <button id="closeTrailerModal" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center">✕</button>
+    </div>
+    <div class="p-5 space-y-4">
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Trailer ID *</label>
+        <input id="trlrIdInput" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm font-mono">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Current Location</label>
+        <div class="grid grid-cols-2 gap-2">
+          <button class="loc-btn py-3 rounded-lg border-2 border-slate-700 font-semibold text-sm" data-loc="yard">
+            <div class="text-ob-500">📍 AT YARD</div>
+          </button>
+          <button class="loc-btn py-3 rounded-lg border-2 border-slate-700 font-semibold text-sm" data-loc="customer">
+            <div class="text-amber-500">👤 AT CUSTOMER</div>
+          </button>
+        </div>
+      </div>
+      <div id="trlrCustomerWrap" class="hidden">
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Which Customer?</label>
+        <select id="trlrCustomer" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm"></select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Notes (optional)</label>
+        <textarea id="trlrNotes" rows="2" class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm" placeholder="e.g., has damaged rear door"></textarea>
+      </div>
+      <div class="flex items-center gap-2">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input id="trlrActive" type="checkbox" class="w-4 h-4" checked>
+          <span class="text-sm">Active (in fleet)</span>
+        </label>
+      </div>
+      <div class="flex gap-2 pt-2 border-t border-slate-800">
+        <button id="trlrSave" class="flex-1 py-3 rounded-lg bg-ob-600 hover:bg-ob-700 font-bold text-white">Save Trailer</button>
+        <button id="trlrDelete" class="px-4 py-3 rounded-lg bg-red-900/50 hover:bg-red-900 font-bold text-red-300 text-sm">🗑️</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="photoViewer" class="hidden fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4" onclick="this.classList.add('hidden')">
   <img id="photoViewerImg" class="max-w-full max-h-full rounded-lg" alt="BOL">
 </div>
@@ -729,6 +862,11 @@ const App = {
         editingDir: null,
         pendingBolPhoto: null,
         editingCustomer: null,
+        // V3.1 additions
+        trailers: [],
+        editingTrailer: null,
+        editingTrailerLoc: 'yard',
+        selectedTripType: null,
     },
 
     init() {
@@ -739,6 +877,7 @@ const App = {
         this.loadMaterials();
         this.loadCarriers();
         this.loadCustomers();
+        this.loadTrailers();
         this.loadSchedule();
         setInterval(() => { if (this.state.activeTab === 'dashboard' || this.state.activeTab === 'routes') this.loadSchedule(); }, 30000);
     },
@@ -880,6 +1019,31 @@ const App = {
         if (this.state.activeTab === 'admin' && this.state.adminSubtab === 'customers') this.renderCustomersAdmin();
     },
 
+    async loadTrailers() {
+        const rows = await this.supabase('trailer_locations?order=trailer_id.asc');
+        this.state.trailers = rows || [];
+        if (this.state.activeTab === 'admin' && this.state.adminSubtab === 'trailers') this.renderTrailersAdmin();
+    },
+
+    trailerById(id) {
+        if (!id) return null;
+        return this.state.trailers.find(t => String(t.id) === String(id));
+    },
+
+    trailerByTrailerId(tid) {
+        if (!tid) return null;
+        return this.state.trailers.find(t => String(t.trailer_id).toLowerCase() === String(tid).toLowerCase());
+    },
+
+    trailersAtYard() {
+        return this.state.trailers.filter(t => t.active && t.current_location === 'yard');
+    },
+
+    trailersAtCustomer(customerId) {
+        if (!customerId) return [];
+        return this.state.trailers.filter(t => t.active && String(t.customer_id) === String(customerId));
+    },
+
     // Helper: get customer lookup table for fast ID resolution
     customerById(id) {
         if (!id) return null;
@@ -969,6 +1133,7 @@ const App = {
         this.state.selectedSlot = slotISO;
         this.state.selectedDir = null;
         this.state.selectedCustomerId = null;
+        this.state.selectedTripType = null;
         const d = new Date(slotISO);
         const endD = new Date(d.getTime() + 60*60*1000);
         document.getElementById('modalSlotTime').textContent =
@@ -981,6 +1146,10 @@ const App = {
         document.getElementById('modalCarrierHint').classList.add('hidden');
         document.getElementById('modalCustomerReq').classList.add('hidden');
         document.getElementById('modalCustomerOpt').classList.remove('hidden');
+        document.getElementById('modalTripTypeWrap').classList.add('hidden');
+        document.getElementById('modalSwapFields').classList.add('hidden');
+        document.getElementById('modalRoundTripFields').classList.add('hidden');
+        document.querySelectorAll('.trip-btn').forEach(b => b.classList.remove('border-ob-500', 'border-ib-500', 'border-amber-500', 'border-blue-500', 'bg-ob-900/30', 'bg-ib-900/30', 'bg-amber-900/30', 'bg-blue-900/30'));
         this.updateConfirmBtn();
         document.getElementById('bookModal').classList.remove('hidden');
     },
@@ -990,6 +1159,7 @@ const App = {
         this.state.selectedSlot = null;
         this.state.selectedDir = null;
         this.state.selectedCustomerId = null;
+        this.state.selectedTripType = null;
     },
 
     selectDirection(dir) {
@@ -1016,6 +1186,7 @@ const App = {
         document.getElementById('modalCarrierHint').classList.toggle('hidden', !isDmx);
         document.getElementById('modalCustomerReq').classList.toggle('hidden', !isDmx);
         document.getElementById('modalCustomerOpt').classList.toggle('hidden', isDmx);
+        this.refreshTripTypeVisibility();
         this.updateConfirmBtn();
     },
 
@@ -1092,13 +1263,94 @@ const App = {
         document.getElementById('modalCustomerSelected').classList.remove('hidden');
         document.getElementById('modalCustomerResults').classList.add('hidden');
         document.getElementById('modalCustomerSearch').value = '';
+        this.refreshTripTypeVisibility();
         this.updateConfirmBtn();
     },
 
     clearSelectedCustomer() {
         this.state.selectedCustomerId = null;
         document.getElementById('modalCustomerSelected').classList.add('hidden');
+        this.refreshTripTypeVisibility();
         this.updateConfirmBtn();
+    },
+
+    // Show Trip Type selector only when: DMX carrier + customer selected
+    refreshTripTypeVisibility() {
+        const carrier = document.getElementById('modalCarrier').value.trim();
+        const isDmx = isDmxCarrier(carrier);
+        const hasCustomer = !!this.state.selectedCustomerId;
+        const wrap = document.getElementById('modalTripTypeWrap');
+        if (isDmx && hasCustomer) {
+            wrap.classList.remove('hidden');
+        } else {
+            wrap.classList.add('hidden');
+            this.clearTripType();
+        }
+    },
+
+    clearTripType() {
+        this.state.selectedTripType = null;
+        document.querySelectorAll('.trip-btn').forEach(b => {
+            b.classList.remove('border-ob-500', 'border-ib-500', 'border-amber-500', 'border-blue-500', 'bg-ob-900/30', 'bg-ib-900/30', 'bg-amber-900/30', 'bg-blue-900/30');
+        });
+        document.getElementById('modalSwapFields').classList.add('hidden');
+        document.getElementById('modalRoundTripFields').classList.add('hidden');
+    },
+
+    selectTripType(trip) {
+        this.state.selectedTripType = trip;
+        // Visual state
+        document.querySelectorAll('.trip-btn').forEach(b => {
+            b.classList.remove('border-ob-500', 'border-ib-500', 'border-amber-500', 'border-blue-500', 'bg-ob-900/30', 'bg-ib-900/30', 'bg-amber-900/30', 'bg-blue-900/30');
+            if (b.dataset.trip === trip) {
+                if (trip === 'delivery')     b.classList.add('border-ob-500', 'bg-ob-900/30');
+                else if (trip === 'pickup')  b.classList.add('border-ib-500', 'bg-ib-900/30');
+                else if (trip === 'swap')    b.classList.add('border-amber-500', 'bg-amber-900/30');
+                else if (trip === 'round_trip') b.classList.add('border-blue-500', 'bg-blue-900/30');
+            }
+        });
+        // Auto-set direction based on trip type
+        if (trip === 'delivery' || trip === 'round_trip' || trip === 'swap') {
+            this.selectDirection('outbound');
+        } else if (trip === 'pickup') {
+            this.selectDirection('inbound');
+        }
+        // Toggle conditional field visibility
+        const swapFields = document.getElementById('modalSwapFields');
+        const roundFields = document.getElementById('modalRoundTripFields');
+        swapFields.classList.toggle('hidden', trip !== 'swap');
+        roundFields.classList.toggle('hidden', trip !== 'round_trip');
+        if (trip === 'swap') this.populateSwapTrailerPickers();
+        if (trip === 'swap' || trip === 'round_trip') this.populateReturnMaterialPickers();
+        this.updateConfirmBtn();
+    },
+
+    populateSwapTrailerPickers() {
+        const dropSel = document.getElementById('modalDropTrlr');
+        const pickSel = document.getElementById('modalPickTrlr');
+        const yardTrailers = this.trailersAtYard();
+        const custTrailers = this.trailersAtCustomer(this.state.selectedCustomerId);
+        dropSel.innerHTML = '<option value="">— Select trailer at yard —</option>' +
+            yardTrailers.map(t => `<option value="${this.esc(t.trailer_id)}">${this.esc(t.trailer_id)}</option>`).join('') +
+            '<option value="__OTHER__">Other / type in truck field...</option>';
+        if (custTrailers.length) {
+            pickSel.innerHTML = '<option value="">— Select trailer at this customer —</option>' +
+                custTrailers.map(t => `<option value="${this.esc(t.trailer_id)}">${this.esc(t.trailer_id)}</option>`).join('') +
+                '<option value="__OTHER__">Other / type in truck field...</option>';
+        } else {
+            pickSel.innerHTML = '<option value="">— No trailers tracked at this customer —</option>' +
+                '<option value="__OTHER__">Enter trailer ID manually...</option>';
+        }
+    },
+
+    populateReturnMaterialPickers() {
+        const items = this.state.materials.filter(m =>
+            m.active && (m.direction === 'inbound' || m.direction === 'both')
+        );
+        const opts = '<option value="">— Select return material —</option>' +
+            items.map(m => `<option value="${this.esc(m.name)}">${this.esc(m.name)}</option>`).join('');
+        document.getElementById('modalPickMat').innerHTML = opts;
+        document.getElementById('modalRoundMat').innerHTML = opts;
     },
 
     async addCustomerFromSearch() {
@@ -1149,14 +1401,17 @@ const App = {
         const car = document.getElementById('modalCarrier').value.trim();
         const validMat = mat && mat !== ADD_NEW_MATERIAL;
         const dmxRequiresCustomer = isDmxCarrier(car) && !this.state.selectedCustomerId;
-        document.getElementById('confirmBook').disabled = !(this.state.selectedDir && validMat && car) || dmxRequiresCustomer;
+        const dmxRequiresTripType = isDmxCarrier(car) && this.state.selectedCustomerId && !this.state.selectedTripType;
+        document.getElementById('confirmBook').disabled =
+            !(this.state.selectedDir && validMat && car) || dmxRequiresCustomer || dmxRequiresTripType;
     },
 
     async confirmBooking() {
         const btn = document.getElementById('confirmBook');
         btn.disabled = true;
         btn.textContent = 'Booking…';
-        const payload = {
+        const trip = this.state.selectedTripType; // null if not DMX
+        const base = {
             time:           this.state.selectedSlot,
             direction:      this.state.selectedDir,
             material:       document.getElementById('modalMaterial').value.trim(),
@@ -1169,17 +1424,36 @@ const App = {
             trailer_id:     document.getElementById('modalTrailer').value.trim() || null,
             notes:          document.getElementById('modalNotes').value.trim() || null,
             status:         'booked',
+            trip_type:      trip || null,
         };
-        payload.booking_hash = await this.generateBookingHash(payload);
-        const res = await this.supabase('schedule', 'POST', payload);
-        btn.disabled = false;
-        btn.textContent = 'Confirm Booking';
-        if (res && res.length) {
-            const carName = payload.carrier;
+
+        try {
+            if (trip === 'swap') {
+                await this._bookSwap(base);
+            } else if (trip === 'round_trip') {
+                await this._bookRoundTrip(base);
+            } else {
+                await this._bookSimple(base);
+            }
+
+            // Auto-register carrier if new
+            const carName = base.carrier;
             if (carName && !this.state.carriers.find(c => c.name.toLowerCase() === carName.toLowerCase())) {
                 await this.supabase('carriers', 'POST', { name: carName, sort_order: 500 });
                 this.loadCarriers();
             }
+        } catch (e) {
+            console.error('[confirmBooking]', e);
+            this.toast(e.message || 'Booking failed', 'error');
+        }
+        btn.disabled = false;
+        btn.textContent = 'Confirm Booking';
+    },
+
+    async _bookSimple(base) {
+        base.booking_hash = await this.generateBookingHash(base);
+        const res = await this.supabase('schedule', 'POST', base);
+        if (res && res.length) {
             this.toast('✓ Booking confirmed', 'success');
             this.closeBookModal();
             await this.loadSchedule();
@@ -1187,6 +1461,79 @@ const App = {
             this.toast('Slot may already be taken', 'error');
             await this.loadSchedule();
         }
+    },
+
+    async _bookRoundTrip(base) {
+        const pickupMat = document.getElementById('modalRoundMat').value.trim();
+        if (!pickupMat) { throw new Error('Return material required'); }
+        base.pickup_material = pickupMat;
+        base.booking_hash = await this.generateBookingHash(base);
+        const res = await this.supabase('schedule', 'POST', base);
+        if (res && res.length) {
+            this.toast('✓ Round trip booked', 'success');
+            this.closeBookModal();
+            await this.loadSchedule();
+        } else {
+            this.toast('Slot may already be taken', 'error');
+            await this.loadSchedule();
+        }
+    },
+
+    async _bookSwap(base) {
+        // SWAP = two linked bookings at the same time slot
+        const dropTrailer = document.getElementById('modalDropTrlr').value;
+        const pickTrailer = document.getElementById('modalPickTrlr').value;
+        const pickupMat   = document.getElementById('modalPickMat').value.trim();
+        const manualTrailer = base.trailer_id;
+        const dropTrlr = dropTrailer === '__OTHER__' ? manualTrailer : dropTrailer;
+        const pickTrlr = pickTrailer === '__OTHER__' ? manualTrailer : pickTrailer;
+        if (!dropTrlr)   { throw new Error('Drop trailer required'); }
+        if (!pickTrlr)   { throw new Error('Pickup trailer required'); }
+        if (!pickupMat)  { throw new Error('Return material required'); }
+        if (dropTrlr.toLowerCase() === pickTrlr.toLowerCase()) { throw new Error('Drop and pickup trailers must differ — use Round Trip if same trailer'); }
+
+        // OUTBOUND half (dropping pallets)
+        const outbound = {
+            ...base,
+            direction: 'outbound',
+            trip_type: 'swap',
+            drop_trailer_id: dropTrlr,
+            pickup_trailer_id: pickTrlr,
+            pickup_material: pickupMat,
+            trailer_id: dropTrlr,
+        };
+        outbound.booking_hash = await this.generateBookingHash(outbound);
+        const resOut = await this.supabase('schedule', 'POST', outbound);
+        if (!resOut || !resOut.length) { throw new Error('Could not create outbound half'); }
+        const outId = resOut[0].id;
+
+        // INBOUND half (bringing OCC back) - linked
+        const inbound = {
+            ...base,
+            direction: 'inbound',
+            material: pickupMat,
+            trip_type: 'swap',
+            drop_trailer_id: dropTrlr,
+            pickup_trailer_id: pickTrlr,
+            pickup_material: pickupMat,
+            trailer_id: pickTrlr,
+            linked_booking_id: outId,
+            bol_number: null,   // will be assigned on completion
+            release_number: null,
+        };
+        inbound.booking_hash = await this.generateBookingHash(inbound);
+        const resIn = await this.supabase('schedule', 'POST', inbound);
+        if (!resIn || !resIn.length) {
+            // Attempt to roll back outbound
+            await this.supabase(`schedule?id=eq.${outId}`, 'DELETE');
+            throw new Error('Could not create inbound half — rolled back');
+        }
+        // Back-link outbound to inbound too
+        await this.supabase(`schedule?id=eq.${outId}`, 'PATCH', { linked_booking_id: resIn[0].id });
+
+        this.toast('✓ Swap booked (drop + pickup)', 'success');
+        this.closeBookModal();
+        await this.loadSchedule();
     },
 
     detectArrivalType(scheduledTime, actualTime) {
@@ -1401,7 +1748,11 @@ const App = {
         const to   = new Date(d); to.setDate(d.getDate() + 1);
 
         const rows = await this.supabase(`schedule?time=gte.${from.toISOString()}&time=lt.${to.toISOString()}&order=time.asc,route_sequence.asc`);
-        const dmxRows = (rows || []).filter(r => isDmxCarrier(r.carrier) && r.status !== 'cancelled' && r.status !== 'no_show');
+        let dmxRows = (rows || []).filter(r => isDmxCarrier(r.carrier) && r.status !== 'cancelled' && r.status !== 'no_show');
+
+        // V3.1: Collapse swap pairs — only show the outbound half of a swap
+        // (the inbound half is linked, same customer, same time slot — showing both would be a duplicate stop)
+        dmxRows = dmxRows.filter(r => !(r.trip_type === 'swap' && r.direction === 'inbound'));
 
         // Sort: use route_sequence if set, else time
         dmxRows.sort((a, b) => {
@@ -1438,10 +1789,35 @@ const App = {
         const t = new Date(r.time);
         const hourLabel = this.formatHour(t.getHours());
         const customer = this.customerById(r.customer_id);
-        const trip = r.direction === 'outbound' ? 'drop' : 'pickup';  // simple inference for V3
-        const tripBadge = trip === 'drop'
-            ? '<span class="route-badge-drop px-2 py-0.5 rounded text-xs font-bold">🔵 DROP</span>'
-            : '<span class="route-badge-pickup px-2 py-0.5 rounded text-xs font-bold">🟢 PICKUP</span>';
+
+        // V3.1: determine badge from trip_type, fallback to direction
+        let tripBadge = '';
+        let tripDetail = '';
+        const trip = r.trip_type;
+        if (trip === 'swap') {
+            tripBadge = '<span class="route-badge-swap px-2 py-0.5 rounded text-xs font-bold">🔁 SWAP</span>';
+            const dropT = r.drop_trailer_id || '?';
+            const pickT = r.pickup_trailer_id || '?';
+            tripDetail = `<div class="mt-2 p-2 rounded bg-amber-900/20 border border-amber-900 text-xs">
+                <div><strong>Drop:</strong> Trailer <span class="font-mono font-bold">${this.esc(dropT)}</span> (${this.esc(r.material)})</div>
+                <div><strong>Pick up:</strong> Trailer <span class="font-mono font-bold">${this.esc(pickT)}</span>${r.pickup_material ? ` (${this.esc(r.pickup_material)})` : ''}</div>
+            </div>`;
+        } else if (trip === 'round_trip') {
+            tripBadge = '<span class="route-badge-swap px-2 py-0.5 rounded text-xs font-bold" style="background:#3b82f6;">🔄 ROUND TRIP</span>';
+            tripDetail = `<div class="mt-2 p-2 rounded bg-blue-900/20 border border-blue-900 text-xs">
+                <div><strong>Drop:</strong> ${this.esc(r.material)}${r.trailer_id ? ` (Trlr <span class="font-mono">${this.esc(r.trailer_id)}</span>)` : ''}</div>
+                <div><strong>Pick up:</strong> ${this.esc(r.pickup_material || 'OCC')} (same trailer, driver waits)</div>
+            </div>`;
+        } else if (trip === 'pickup') {
+            tripBadge = '<span class="route-badge-pickup px-2 py-0.5 rounded text-xs font-bold">🟢 PICKUP</span>';
+        } else if (trip === 'delivery') {
+            tripBadge = '<span class="route-badge-drop px-2 py-0.5 rounded text-xs font-bold">🔵 DROP</span>';
+        } else {
+            // Legacy fallback — infer from direction
+            tripBadge = r.direction === 'outbound'
+                ? '<span class="route-badge-drop px-2 py-0.5 rounded text-xs font-bold">🔵 DROP</span>'
+                : '<span class="route-badge-pickup px-2 py-0.5 rounded text-xs font-bold">🟢 PICKUP</span>';
+        }
 
         let statusBadge = '';
         let actionBtns = '';
@@ -1479,8 +1855,12 @@ const App = {
         const bolBits = [];
         if (r.bol_number)  bolBits.push(`<span class="copyable" data-copy="${this.esc(r.bol_number)}">📋 BOL ${this.esc(r.bol_number)}</span>`);
         if (r.release_number) bolBits.push(`<span class="copyable" data-copy="${this.esc(r.release_number)}">Rel ${this.esc(r.release_number)}</span>`);
-        if (r.trailer_id)  bolBits.push(`Trlr ${this.esc(r.trailer_id)}`);
+        if (r.trailer_id && !trip)  bolBits.push(`Trlr ${this.esc(r.trailer_id)}`);
         const bolLine = bolBits.length ? `<div class="text-xs text-slate-500 mt-2 font-mono flex gap-2 flex-wrap">${bolBits.join('<span class="text-slate-700">·</span>')}</div>` : '';
+
+        const materialLine = trip === 'swap' || trip === 'round_trip'
+            ? '' // material shown in tripDetail block
+            : `<div class="mt-2 text-sm text-slate-400">Material: <span class="font-semibold text-slate-200">${this.esc(r.material)}</span></div>`;
 
         return `
         <div class="route-card bg-slate-800 rounded-xl p-4 border-2 border-slate-700">
@@ -1492,7 +1872,8 @@ const App = {
                     ${statusBadge}
                 </div>
             </div>
-            <div class="mt-2 text-sm text-slate-400">Material: <span class="font-semibold text-slate-200">${this.esc(r.material)}</span></div>
+            ${materialLine}
+            ${tripDetail}
             ${custBlock}
             ${bolLine}
             ${r.notes ? `<div class="text-xs text-slate-500 mt-2 italic">"${this.esc(r.notes)}"</div>` : ''}
@@ -1623,6 +2004,10 @@ const App = {
         btn.disabled = false;
         btn.textContent = 'Mark Complete';
         if (res) {
+            // V3.1: Auto-update trailer location based on trip type
+            const updatedBooking = { ...booking, ...patch };
+            await this.applyTrailerLocationChange(updatedBooking);
+            await this.loadTrailers();
             this.toast('✓ Load completed', 'success');
             this.closeCompleteModal();
             await this.loadSchedule();
@@ -1807,6 +2192,7 @@ const App = {
         });
         document.querySelectorAll('.admin-subpanel').forEach(p => p.classList.add('hidden'));
         if (sub === 'customers') { document.getElementById('adminCustomers').classList.remove('hidden'); this.renderCustomersAdmin(); }
+        if (sub === 'trailers')  { document.getElementById('adminTrailers').classList.remove('hidden');  this.renderTrailersAdmin(); }
         if (sub === 'materials') { document.getElementById('adminMaterials').classList.remove('hidden'); this.renderMaterialsAdmin(); }
         if (sub === 'carriers')  { document.getElementById('adminCarriers').classList.remove('hidden');  this.renderCarriersAdmin(); }
         if (sub === 'scorecard') { document.getElementById('adminScorecard').classList.remove('hidden'); this.renderScorecard(); }
@@ -1983,6 +2369,206 @@ const App = {
             await this.loadCustomers();
             this.renderCustomersAdmin();
         }
+    },
+
+    // ─── TRAILER INVENTORY ADMIN (NEW in V3.1) ──────────────
+    renderTrailersAdmin() {
+        const list = document.getElementById('trlrList');
+        const total = this.state.trailers.filter(t => t.active).length;
+        const atYard = this.state.trailers.filter(t => t.active && t.current_location === 'yard').length;
+        const atCust = this.state.trailers.filter(t => t.active && t.current_location !== 'yard').length;
+        document.getElementById('trlrStatTotal').textContent = total;
+        document.getElementById('trlrStatYard').textContent  = atYard;
+        document.getElementById('trlrStatOut').textContent   = atCust;
+
+        const trailers = this.state.trailers.slice()
+            .sort((a, b) => (a.trailer_id || '').localeCompare(b.trailer_id || '', undefined, { numeric: true }));
+
+        if (!trailers.length) {
+            list.innerHTML = '<div class="text-center py-8 text-slate-500 text-sm">No trailers tracked yet. Add one above to start.</div>';
+            return;
+        }
+
+        list.innerHTML = trailers.map(t => {
+            const atYardNow = t.current_location === 'yard';
+            const cust = t.customer_id ? this.customerById(t.customer_id) : null;
+            const locLabel = atYardNow
+                ? '<span class="text-ob-500 font-semibold">📍 At Yard</span>'
+                : cust
+                    ? `<span class="text-amber-400 font-semibold">👤 ${this.esc(cust.display_name || cust.name)}</span>`
+                    : `<span class="text-amber-400 font-semibold">👤 ${this.esc(t.current_location)}</span>`;
+            const since = t.dropped_at
+                ? `<span class="text-xs text-slate-500 ml-2">since ${new Date(t.dropped_at).toLocaleDateString()}</span>`
+                : '';
+            return `
+            <div class="bg-slate-800 rounded-lg p-3 border border-slate-700 flex items-center gap-3 cursor-pointer hover:border-slate-600 ${t.active ? '' : 'inactive-row'}" data-trlr-id="${t.id}">
+                <div class="w-12 h-12 rounded-lg bg-slate-900 flex items-center justify-center font-mono font-extrabold text-lg text-slate-200">${this.esc(t.trailer_id)}</div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center flex-wrap">
+                        ${locLabel}
+                        ${since}
+                    </div>
+                    ${t.notes ? `<div class="text-xs text-slate-500 italic mt-0.5 truncate">"${this.esc(t.notes)}"</div>` : ''}
+                </div>
+                <div class="text-slate-500">→</div>
+            </div>`;
+        }).join('');
+
+        list.querySelectorAll('[data-trlr-id]').forEach(el => {
+            el.addEventListener('click', () => this.openTrailerModal(el.dataset.trlrId));
+        });
+    },
+
+    openTrailerModal(id) {
+        let t;
+        if (id) {
+            t = this.trailerById(id);
+            if (!t) return;
+            document.getElementById('trailerModalTitle').textContent = '✏️ Edit Trailer';
+            document.getElementById('trailerModalId').textContent = `ID: ${t.id}`;
+            document.getElementById('trlrDelete').classList.remove('hidden');
+        } else {
+            t = {};
+            document.getElementById('trailerModalTitle').textContent = '➕ Add Trailer';
+            document.getElementById('trailerModalId').textContent = '';
+            document.getElementById('trlrDelete').classList.add('hidden');
+        }
+        this.state.editingTrailer = t;
+
+        document.getElementById('trlrIdInput').value = t.trailer_id || '';
+        document.getElementById('trlrNotes').value   = t.notes || '';
+        document.getElementById('trlrActive').checked = t.active !== false;
+
+        // Populate customer dropdown
+        const sel = document.getElementById('trlrCustomer');
+        const customers = this.state.customers.filter(c => c.active)
+            .sort((a, b) => (a.display_name || a.name).localeCompare(b.display_name || b.name));
+        sel.innerHTML = '<option value="">— Select customer —</option>' +
+            customers.map(c => `<option value="${c.id}">${this.esc(c.display_name || c.name)}</option>`).join('');
+
+        // Set location state
+        const loc = t.current_location === 'yard' || !t.current_location ? 'yard' : 'customer';
+        this.state.editingTrailerLoc = loc;
+        this.selectTrailerLoc(loc);
+        if (loc === 'customer' && t.customer_id) sel.value = t.customer_id;
+
+        document.getElementById('trailerModal').classList.remove('hidden');
+    },
+
+    closeTrailerModal() {
+        document.getElementById('trailerModal').classList.add('hidden');
+        this.state.editingTrailer = null;
+    },
+
+    selectTrailerLoc(loc) {
+        this.state.editingTrailerLoc = loc;
+        document.querySelectorAll('.loc-btn').forEach(b => {
+            b.classList.remove('border-ob-500', 'border-amber-500', 'bg-ob-900/30', 'bg-amber-900/30');
+            if (b.dataset.loc === loc) {
+                if (loc === 'yard') b.classList.add('border-ob-500', 'bg-ob-900/30');
+                else                b.classList.add('border-amber-500', 'bg-amber-900/30');
+            }
+        });
+        document.getElementById('trlrCustomerWrap').classList.toggle('hidden', loc !== 'customer');
+    },
+
+    async saveTrailer() {
+        const trailerId = document.getElementById('trlrIdInput').value.trim();
+        if (!trailerId) { this.toast('Trailer ID required', 'error'); return; }
+        const loc = this.state.editingTrailerLoc;
+        let customerId = null, locationLabel = 'yard', droppedAt = null;
+        if (loc === 'customer') {
+            const custVal = document.getElementById('trlrCustomer').value;
+            if (!custVal) { this.toast('Select a customer', 'error'); return; }
+            customerId = parseInt(custVal, 10);
+            const cust = this.customerById(customerId);
+            locationLabel = cust ? (cust.display_name || cust.name) : 'customer';
+            // preserve existing dropped_at if already at this customer, else now
+            const prev = this.state.editingTrailer;
+            droppedAt = (prev && prev.customer_id === customerId && prev.dropped_at) ? prev.dropped_at : new Date().toISOString();
+        }
+        const payload = {
+            trailer_id: trailerId,
+            current_location: locationLabel,
+            customer_id: customerId,
+            dropped_at: droppedAt,
+            notes: document.getElementById('trlrNotes').value.trim() || null,
+            active: document.getElementById('trlrActive').checked,
+        };
+        const editing = this.state.editingTrailer && this.state.editingTrailer.id;
+        const btn = document.getElementById('trlrSave');
+        btn.disabled = true;
+        btn.textContent = 'Saving…';
+        let res;
+        if (editing) {
+            res = await this.supabase(`trailer_locations?id=eq.${this.state.editingTrailer.id}`, 'PATCH', payload);
+        } else {
+            res = await this.supabase('trailer_locations', 'POST', payload);
+        }
+        btn.disabled = false;
+        btn.textContent = 'Save Trailer';
+        if (res) {
+            this.toast(editing ? '✓ Trailer updated' : '✓ Trailer added', 'success');
+            this.closeTrailerModal();
+            await this.loadTrailers();
+        } else {
+            this.toast('Save failed — may be a duplicate trailer ID', 'error');
+        }
+    },
+
+    async deleteTrailer() {
+        const t = this.state.editingTrailer;
+        if (!t || !t.id) return;
+        if (!confirm(`⚠️ Remove trailer "${t.trailer_id}" from inventory?\n\nThis will not affect any bookings.`)) return;
+        const res = await this.supabase(`trailer_locations?id=eq.${t.id}`, 'DELETE');
+        if (res !== null) {
+            this.toast('✓ Trailer removed', 'success');
+            this.closeTrailerModal();
+            await this.loadTrailers();
+        }
+    },
+
+    // Auto-update trailer locations when a swap/delivery completes
+    async applyTrailerLocationChange(booking) {
+        if (!booking || !booking.trailer_id) return;
+        const tid = booking.trailer_id;
+        // Ensure trailer exists
+        let trailer = this.trailerByTrailerId(tid);
+        if (!trailer) {
+            // Auto-register
+            const res = await this.supabase('trailer_locations', 'POST', {
+                trailer_id: tid, current_location: 'yard', active: true,
+            });
+            if (res && res.length) trailer = res[0];
+            else return;
+        }
+        // Compute new location based on trip type + direction
+        let newLoc = 'yard', newCustId = null, newDropped = null;
+        const trip = booking.trip_type;
+        const cust = booking.customer_id ? this.customerById(booking.customer_id) : null;
+        const custName = cust ? (cust.display_name || cust.name) : null;
+
+        if (trip === 'swap' && booking.direction === 'outbound') {
+            // Drop trailer is now at customer
+            if (cust) { newLoc = custName; newCustId = cust.id; newDropped = new Date().toISOString(); }
+        } else if (trip === 'swap' && booking.direction === 'inbound') {
+            // Pickup trailer is back at yard
+            newLoc = 'yard';
+        } else if (trip === 'delivery' && cust) {
+            // Drop & leave: trailer stays at customer
+            newLoc = custName; newCustId = cust.id; newDropped = new Date().toISOString();
+        } else if (trip === 'round_trip' || trip === 'pickup') {
+            // Same trailer returns to yard
+            newLoc = 'yard';
+        } else {
+            return; // No auto-update for untyped bookings
+        }
+        await this.supabase(`trailer_locations?id=eq.${trailer.id}`, 'PATCH', {
+            current_location: newLoc,
+            customer_id: newCustId,
+            dropped_at: newDropped,
+            last_booking_id: booking.id,
+        });
     },
 
     // ─── MATERIALS / CARRIERS ADMIN (unchanged from V2.3) ───
@@ -2213,6 +2799,63 @@ const App = {
             this.renderCustomersAdmin();
         });
 
+        // ═══ V3.1 BINDINGS ═══
+        // Trip type buttons (in booking modal)
+        document.querySelectorAll('.trip-btn').forEach(b => {
+            b.addEventListener('click', () => this.selectTripType(b.dataset.trip));
+        });
+
+        // Pickup-trailer select refresh when swap customer/drop changes
+        document.getElementById('modalDropTrlr').addEventListener('change', e => {
+            if (e.target.value === '__OTHER__') {
+                const manual = prompt('Enter drop trailer ID manually:');
+                if (manual) {
+                    // Add option and select it
+                    const opt = document.createElement('option');
+                    opt.value = manual;
+                    opt.textContent = manual + ' (manual)';
+                    e.target.insertBefore(opt, e.target.firstChild.nextSibling);
+                    e.target.value = manual;
+                } else {
+                    e.target.value = '';
+                }
+            }
+        });
+        document.getElementById('modalPickTrlr').addEventListener('change', e => {
+            if (e.target.value === '__OTHER__') {
+                const manual = prompt('Enter pickup trailer ID manually:');
+                if (manual) {
+                    const opt = document.createElement('option');
+                    opt.value = manual;
+                    opt.textContent = manual + ' (manual)';
+                    e.target.insertBefore(opt, e.target.firstChild.nextSibling);
+                    e.target.value = manual;
+                } else {
+                    e.target.value = '';
+                }
+            }
+        });
+
+        // Trailer inventory admin
+        document.getElementById('addTrlrBtn').addEventListener('click', () => {
+            const id = document.getElementById('newTrlrId').value.trim();
+            if (!id) { this.toast('Enter a trailer ID first', 'error'); return; }
+            // Open modal pre-filled
+            this.openTrailerModal(null);
+            document.getElementById('trlrIdInput').value = id;
+            const locSel = document.getElementById('newTrlrLoc').value;
+            this.selectTrailerLoc(locSel);
+            document.getElementById('newTrlrId').value = '';
+        });
+
+        // Trailer edit modal
+        document.getElementById('closeTrailerModal').addEventListener('click', () => this.closeTrailerModal());
+        document.getElementById('trlrSave').addEventListener('click', () => this.saveTrailer());
+        document.getElementById('trlrDelete').addEventListener('click', () => this.deleteTrailer());
+        document.querySelectorAll('.loc-btn').forEach(b => {
+            b.addEventListener('click', () => this.selectTrailerLoc(b.dataset.loc));
+        });
+
         // Admin PIN
         document.getElementById('pinSubmit').addEventListener('click', () => this.trySubmitPin());
         document.getElementById('pinInput').addEventListener('keypress', e => { if (e.key === 'Enter') this.trySubmitPin(); });
@@ -2233,7 +2876,7 @@ const App = {
                 document.getElementById('bookDate').focus();
             }
             if (e.key === 'Escape') {
-                ['bookModal','completeModal','editModal','customerModal','photoViewer'].forEach(id => {
+                ['bookModal','completeModal','editModal','customerModal','trailerModal','photoViewer'].forEach(id => {
                     const el = document.getElementById(id);
                     if (el && !el.classList.contains('hidden')) el.classList.add('hidden');
                 });
