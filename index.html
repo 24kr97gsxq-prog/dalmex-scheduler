@@ -12,25 +12,28 @@
 
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
-  tailwind.config = { theme: { extend: {
-    colors: {
-      ob: { 500:'#10b981', 600:'#059669', 700:'#047857', 900:'#064e3b' },
-      ib: { 500:'#3b82f6', 600:'#2563eb', 700:'#1d4ed8', 900:'#1e3a8a' },
-    },
-    fontFamily: { display: ['"DM Sans"','sans-serif'], mono: ['"JetBrains Mono"','monospace'] }
-  }}}
+  tailwind.config = {
+    theme: { extend: {
+      colors: {
+        ob: { 500:'#10b981', 600:'#059669', 700:'#047857', 900:'#064e3b' },
+        ib: { 500:'#3b82f6', 600:'#2563eb', 700:'#1d4ed8', 900:'#1e3a8a' },
+      },
+      fontFamily: { display: ['"DM Sans"','sans-serif'], mono: ['"JetBrains Mono"','monospace'] }
+    } }
+  }
 </script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 
 <style>
-  html, body { font-family: 'DM Sans', sans-serif; background: #0f172a; color: #f1f5f9; }
+  :root { --bg:#0f172a; --panel:#1e293b; --ob:#10b981; --ib:#3b82f6; --warn:#f59e0b; }
+  html, body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: #f1f5f9; }
   .slot-btn { transition: all 0.15s ease; }
   .slot-btn:active { transform: scale(0.97); }
-  .slot-booked-ob { background: rgba(16,185,129,0.15); border-color: #10b981; }
-  .slot-booked-ib { background: rgba(59,130,246,0.15); border-color: #3b82f6; }
-  .slot-arrived { background: rgba(245,158,11,0.25); border-color: #f59e0b; }
+  .slot-booked-ob { background: rgba(16,185,129,0.15); border-color: var(--ob); }
+  .slot-booked-ib { background: rgba(59,130,246,0.15); border-color: var(--ib); }
+  .slot-arrived { background: rgba(245,158,11,0.25); border-color: var(--warn); }
   .slot-completed { background: rgba(100,116,139,0.2); border-color: #64748b; opacity:0.6; }
-  .tab-active { background: #1e293b; color: #f1f5f9; border-bottom: 2px solid #10b981; }
+  .tab-active { background: var(--panel); border-bottom: 2px solid var(--ob); }
   .toast-in { animation: toastIn 0.25s ease-out; }
   @keyframes toastIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
   .pulse-dot { animation: pulse 1.5s infinite; }
@@ -39,7 +42,6 @@
   ::-webkit-scrollbar-track { background: #1e293b; }
   ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
   .inactive-row { opacity: 0.5; }
-  .bol-thumb { transition: transform 0.15s ease; }
   .bol-thumb:active { transform: scale(0.95); }
 </style>
 </head>
@@ -61,151 +63,154 @@
   </div>
   <div class="max-w-6xl mx-auto px-4 flex gap-1 border-t border-slate-800 overflow-x-auto">
     <button class="tab-btn tab-active px-4 py-2.5 text-sm font-semibold whitespace-nowrap" data-tab="book">Book a Slot</button>
-    <button class="tab-btn px-4 py-2.5 text-sm font-semibold text-slate-400 hover:text-slate-200 whitespace-nowrap" data-tab="dashboard">Yard Dashboard</button>
-    <button class="tab-btn px-4 py-2.5 text-sm font-semibold text-slate-400 hover:text-slate-200 whitespace-nowrap" data-tab="admin">🔒 Admin</button>
-    <button class="tab-btn px-4 py-2.5 text-sm font-semibold text-slate-400 hover:text-slate-200 whitespace-nowrap" data-tab="settings">Settings</button>
+    <button class="tab-btn px-4 py-2.5 text-sm font-semibold text-slate-400 whitespace-nowrap" data-tab="dashboard">Yard Dashboard</button>
+    <button class="tab-btn px-4 py-2.5 text-sm font-semibold text-slate-400 whitespace-nowrap" data-tab="admin">🔒 Admin</button>
+    <button class="tab-btn px-4 py-2.5 text-sm font-semibold text-slate-400 whitespace-nowrap" data-tab="settings">Settings</button>
   </div>
 </header>
 
 <main class="max-w-6xl mx-auto px-4 py-6">
 
-<section id="bookTab" class="tab-content">
-  <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
-    <div>
-      <h2 class="text-2xl font-bold">Schedule a Truck</h2>
-      <p class="text-sm text-slate-400">Select a date, then tap a 1-hour slot to book.</p>
-    </div>
-    <div class="flex gap-2">
-      <button id="prevDay" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">◀ Prev</button>
-      <input type="date" id="bookDate" class="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm">
-      <button id="nextDay" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">Next ▶</button>
-    </div>
-  </div>
-  <div class="flex gap-4 mb-4 text-xs flex-wrap">
-    <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-slate-700 border border-slate-600"></span><span class="text-slate-400">Available</span></div>
-    <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded slot-booked-ob border"></span><span class="text-slate-400">Outbound (Bales/Revenue)</span></div>
-    <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded slot-booked-ib border"></span><span class="text-slate-400">Inbound</span></div>
-    <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded slot-arrived border"></span><span class="text-slate-400">Arrived</span></div>
-  </div>
-  <div id="slotGrid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"></div>
-</section>
-
-<section id="dashboardTab" class="tab-content hidden">
-  <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
-    <div>
-      <h2 class="text-2xl font-bold">Yard Dashboard</h2>
-      <p class="text-sm text-slate-400">Mark trucks as arrived or completed.</p>
-    </div>
-    <div class="flex gap-2 items-center">
-      <div class="flex items-center gap-1.5 text-xs text-slate-400 mr-2">
-        <span class="pulse-dot w-2 h-2 rounded-full bg-ob-500"></span>
-        <span id="lastRefresh">—</span>
-      </div>
-      <button id="refreshDash" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">↻ Refresh</button>
-    </div>
-  </div>
-  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-    <div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
-      <div class="text-xs text-slate-400 uppercase tracking-wide">Today · Outbound</div>
-      <div class="text-2xl font-bold text-ob-500 mt-1" id="statOB">0</div>
-    </div>
-    <div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
-      <div class="text-xs text-slate-400 uppercase tracking-wide">Today · Inbound</div>
-      <div class="text-2xl font-bold text-ib-500 mt-1" id="statIB">0</div>
-    </div>
-    <div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
-      <div class="text-xs text-slate-400 uppercase tracking-wide">On Site Now</div>
-      <div class="text-2xl font-bold text-amber-500 mt-1" id="statArrived">0</div>
-    </div>
-    <div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
-      <div class="text-xs text-slate-400 uppercase tracking-wide">Completed</div>
-      <div class="text-2xl font-bold text-slate-400 mt-1" id="statDone">0</div>
-    </div>
-  </div>
-  <div id="dashList" class="space-y-2"></div>
-  <div id="dashEmpty" class="hidden text-center py-12 text-slate-500"><p class="text-sm">No bookings for today yet.</p></div>
-</section>
-
-<section id="adminTab" class="tab-content hidden">
-  <div id="adminGate" class="max-w-sm mx-auto mt-10">
-    <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700 text-center">
-      <div class="text-4xl mb-3">🔒</div>
-      <h2 class="text-xl font-bold mb-1">Admin Access</h2>
-      <p class="text-sm text-slate-400 mb-4">Enter PIN to manage materials and carriers.</p>
-      <input type="password" id="pinInput" maxlength="4" inputmode="numeric" class="w-full px-4 py-3 rounded-lg bg-slate-900 border border-slate-700 text-center text-2xl font-mono tracking-widest" placeholder="••••">
-      <button id="pinSubmit" class="w-full mt-3 py-2.5 rounded-lg bg-ob-600 hover:bg-ob-700 font-semibold text-white">Unlock</button>
-      <div id="pinError" class="hidden mt-2 text-xs text-red-400">Incorrect PIN</div>
-    </div>
-  </div>
-  <div id="adminContent" class="hidden">
-    <div class="flex items-center justify-between mb-5 flex-wrap gap-3">
+  <section id="bookTab" class="tab-content">
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
       <div>
-        <h2 class="text-2xl font-bold">Admin</h2>
-        <p class="text-sm text-slate-400">Manage materials and carriers.</p>
+        <h2 class="text-2xl font-bold">Schedule a Truck</h2>
+        <p class="text-sm text-slate-400">Select a date, then tap a 1-hour slot to book.</p>
       </div>
-      <button id="adminLock" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">🔒 Lock</button>
-    </div>
-    <div class="flex gap-1 border-b border-slate-800 mb-5">
-      <button class="admin-subtab px-4 py-2 text-sm font-semibold border-b-2 border-ob-500 text-slate-100" data-subtab="materials">Materials</button>
-      <button class="admin-subtab px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200" data-subtab="carriers">Carriers</button>
-    </div>
-    <div id="adminMaterials" class="admin-subpanel">
-      <div class="bg-slate-800 rounded-lg p-4 border border-slate-700 mb-4">
-        <h3 class="text-sm font-bold mb-3 text-slate-300">Add Material</h3>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
-          <input id="newMatName" type="text" placeholder="Material name" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm">
-          <select id="newMatDir" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm">
-            <option value="outbound">Outbound (Bales)</option>
-            <option value="inbound">Inbound</option>
-            <option value="both">Both</option>
-          </select>
-          <button id="addMatBtn" class="px-4 py-2 rounded bg-ob-600 hover:bg-ob-700 font-semibold text-sm text-white">+ Add Material</button>
-        </div>
+      <div class="flex gap-2">
+        <button id="prevDay" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">◀ Prev</button>
+        <input type="date" id="bookDate" class="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm">
+        <button id="nextDay" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">Next ▶</button>
       </div>
-      <div id="matList" class="space-y-1"></div>
     </div>
-    <div id="adminCarriers" class="admin-subpanel hidden">
-      <div class="bg-slate-800 rounded-lg p-4 border border-slate-700 mb-4">
-        <h3 class="text-sm font-bold mb-3 text-slate-300">Add Carrier</h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-          <input id="newCarName" type="text" placeholder="Carrier / company name" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm">
-          <button id="addCarBtn" class="px-4 py-2 rounded bg-ob-600 hover:bg-ob-700 font-semibold text-sm text-white">+ Add Carrier</button>
-        </div>
-      </div>
-      <div id="carList" class="space-y-1"></div>
+    <div class="flex gap-4 mb-4 text-xs flex-wrap">
+      <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-slate-700 border border-slate-600"></span><span class="text-slate-400">Available</span></div>
+      <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded slot-booked-ob border"></span><span class="text-slate-400">Outbound</span></div>
+      <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded slot-booked-ib border"></span><span class="text-slate-400">Inbound</span></div>
+      <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded slot-arrived border"></span><span class="text-slate-400">Arrived</span></div>
     </div>
-  </div>
-</section>
+    <div id="slotGrid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"></div>
+  </section>
 
-<section id="settingsTab" class="tab-content hidden">
-  <h2 class="text-2xl font-bold mb-2">Settings</h2>
-  <p class="text-sm text-slate-400 mb-4">Database credentials are built in. These fields are only for rotating keys.</p>
-  <div class="bg-slate-800 rounded-lg p-5 border border-slate-700 space-y-4 max-w-xl">
-    <div>
-      <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Supabase URL (override)</label>
-      <input id="supabaseUrl" class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 font-mono text-sm" placeholder="Leave blank to use default">
-    </div>
-    <div>
-      <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Supabase Anon Key (override)</label>
-      <textarea id="supabaseKey" rows="3" class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 font-mono text-xs" placeholder="Leave blank to use default"></textarea>
-    </div>
-    <div>
-      <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Yard Hours</label>
+  <section id="dashboardTab" class="tab-content hidden">
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+      <div>
+        <h2 class="text-2xl font-bold">Yard Dashboard</h2>
+        <p class="text-sm text-slate-400">Mark trucks as arrived or completed.</p>
+      </div>
       <div class="flex gap-2 items-center">
-        <input id="startHour" type="number" min="0" max="23" class="w-20 px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm">
-        <span class="text-slate-500">to</span>
-        <input id="endHour" type="number" min="1" max="24" class="w-20 px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm">
-        <span class="text-slate-500 text-sm">(24h)</span>
+        <div id="adminIndicator" class="hidden flex items-center gap-1 px-2 py-1 rounded bg-ob-900/50 text-ob-500 text-xs font-bold">🔓 ADMIN</div>
+        <div class="flex items-center gap-1.5 text-xs text-slate-400 mr-2">
+          <span class="pulse-dot w-2 h-2 rounded-full bg-ob-500"></span>
+          <span id="lastRefresh">—</span>
+        </div>
+        <button id="refreshDash" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">↻ Refresh</button>
       </div>
     </div>
-    <div class="flex gap-2">
-      <button id="saveSettings" class="flex-1 py-2.5 rounded-lg bg-ob-600 hover:bg-ob-700 font-semibold text-white">Save</button>
-      <button id="resetSettings" class="px-4 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 font-semibold text-white text-sm">Reset</button>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+      <div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
+        <div class="text-xs text-slate-400 uppercase tracking-wide">Today · Outbound</div>
+        <div class="text-2xl font-bold text-ob-500 mt-1" id="statOB">0</div>
+      </div>
+      <div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
+        <div class="text-xs text-slate-400 uppercase tracking-wide">Today · Inbound</div>
+        <div class="text-2xl font-bold text-ib-500 mt-1" id="statIB">0</div>
+      </div>
+      <div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
+        <div class="text-xs text-slate-400 uppercase tracking-wide">On Site Now</div>
+        <div class="text-2xl font-bold text-amber-500 mt-1" id="statArrived">0</div>
+      </div>
+      <div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
+        <div class="text-xs text-slate-400 uppercase tracking-wide">Completed</div>
+        <div class="text-2xl font-bold text-slate-400 mt-1" id="statDone">0</div>
+      </div>
     </div>
-    <div id="settingsStatus" class="text-xs text-slate-400 text-center"></div>
-  </div>
-</section>
+    <div id="dashList" class="space-y-2"></div>
+    <div id="dashEmpty" class="hidden text-center py-12 text-slate-500"><p class="text-sm">No bookings for today yet.</p></div>
+  </section>
 
+  <section id="adminTab" class="tab-content hidden">
+    <div id="adminGate" class="max-w-sm mx-auto mt-10">
+      <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700 text-center">
+        <div class="text-4xl mb-3">🔒</div>
+        <h2 class="text-xl font-bold mb-1">Admin Access</h2>
+        <p class="text-sm text-slate-400 mb-4">Enter PIN to unlock admin tools.</p>
+        <input type="password" id="pinInput" maxlength="4" inputmode="numeric" class="w-full px-4 py-3 rounded-lg bg-slate-900 border border-slate-700 text-center text-2xl font-mono tracking-widest" placeholder="••••">
+        <button id="pinSubmit" class="w-full mt-3 py-2.5 rounded-lg bg-ob-600 hover:bg-ob-700 font-semibold text-white">Unlock</button>
+        <div id="pinError" class="hidden mt-2 text-xs text-red-400">Incorrect PIN</div>
+      </div>
+    </div>
+    <div id="adminContent" class="hidden">
+      <div class="flex items-center justify-between mb-5 flex-wrap gap-3">
+        <div>
+          <h2 class="text-2xl font-bold">Admin</h2>
+          <p class="text-sm text-slate-400">Manage materials, carriers, and bookings.</p>
+        </div>
+        <button id="adminLock" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">🔒 Lock</button>
+      </div>
+      <div class="bg-ob-900/20 border border-ob-700 rounded-lg p-3 mb-5 text-sm text-ob-500">
+        ✓ Admin unlocked — "Edit" buttons now appear on all dashboard bookings.
+      </div>
+      <div class="flex gap-1 border-b border-slate-800 mb-5">
+        <button class="admin-subtab px-4 py-2 text-sm font-semibold border-b-2 border-ob-500 text-slate-100" data-subtab="materials">Materials</button>
+        <button class="admin-subtab px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400" data-subtab="carriers">Carriers</button>
+      </div>
+      <div id="adminMaterials" class="admin-subpanel">
+        <div class="bg-slate-800 rounded-lg p-4 border border-slate-700 mb-4">
+          <h3 class="text-sm font-bold mb-3 text-slate-300">Add Material</h3>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <input id="newMatName" type="text" placeholder="Material name" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm">
+            <select id="newMatDir" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm">
+              <option value="outbound">Outbound (Bales)</option>
+              <option value="inbound">Inbound</option>
+              <option value="both">Both</option>
+            </select>
+            <button id="addMatBtn" class="px-4 py-2 rounded bg-ob-600 hover:bg-ob-700 font-semibold text-sm text-white">+ Add Material</button>
+          </div>
+        </div>
+        <div id="matList" class="space-y-1"></div>
+      </div>
+      <div id="adminCarriers" class="admin-subpanel hidden">
+        <div class="bg-slate-800 rounded-lg p-4 border border-slate-700 mb-4">
+          <h3 class="text-sm font-bold mb-3 text-slate-300">Add Carrier</h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <input id="newCarName" type="text" placeholder="Carrier / company name" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm">
+            <button id="addCarBtn" class="px-4 py-2 rounded bg-ob-600 hover:bg-ob-700 font-semibold text-sm text-white">+ Add Carrier</button>
+          </div>
+        </div>
+        <div id="carList" class="space-y-1"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="settingsTab" class="tab-content hidden">
+    <h2 class="text-2xl font-bold mb-2">Settings</h2>
+    <p class="text-sm text-slate-400 mb-4">Database credentials are built in.</p>
+    <div class="bg-slate-800 rounded-lg p-5 border border-slate-700 space-y-4 max-w-xl">
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Supabase URL (override)</label>
+        <input id="supabaseUrl" class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 font-mono text-sm" placeholder="Leave blank for default">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Supabase Anon Key (override)</label>
+        <textarea id="supabaseKey" rows="3" class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 font-mono text-xs" placeholder="Leave blank for default"></textarea>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Yard Hours</label>
+        <div class="flex gap-2 items-center">
+          <input id="startHour" type="number" min="0" max="23" class="w-20 px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm">
+          <span class="text-slate-500">to</span>
+          <input id="endHour" type="number" min="1" max="24" class="w-20 px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm">
+          <span class="text-slate-500 text-sm">(24h)</span>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <button id="saveSettings" class="flex-1 py-2.5 rounded-lg bg-ob-600 hover:bg-ob-700 font-semibold text-white">Save</button>
+        <button id="resetSettings" class="px-4 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 font-semibold text-white text-sm">Reset</button>
+      </div>
+      <div id="settingsStatus" class="text-xs text-slate-400 text-center"></div>
+    </div>
+  </section>
 </main>
 
 <!-- BOOKING MODAL -->
@@ -309,9 +314,15 @@
       </div>
       <div>
         <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">BOL Photo</label>
-        <div class="flex gap-2">
-          <input type="file" id="bolPhotoInput" accept="image/*" capture="environment" class="hidden">
-          <button id="bolPhotoBtn" class="flex-1 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 border-dashed text-sm font-semibold">📷 Take Photo / Upload</button>
+        <div class="grid grid-cols-2 gap-2">
+          <input type="file" id="bolPhotoCamera" accept="image/*" capture="environment" class="hidden">
+          <input type="file" id="bolPhotoLibrary" accept="image/*" class="hidden">
+          <button id="bolCameraBtn" class="py-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 border-dashed text-sm font-semibold">
+            📷 Take Photo
+          </button>
+          <button id="bolLibraryBtn" class="py-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 border-dashed text-sm font-semibold">
+            🖼️ Choose from Library
+          </button>
         </div>
         <div id="bolPhotoPreview" class="hidden mt-3">
           <img id="bolPhotoPreviewImg" class="w-full rounded-lg border border-slate-700" alt="BOL preview">
@@ -324,13 +335,112 @@
   </div>
 </div>
 
-<!-- PHOTO VIEWER -->
+<!-- EDIT MODAL (ADMIN) -->
+<div id="editModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-end md:items-center justify-center p-0 md:p-4">
+  <div class="bg-slate-900 w-full md:max-w-lg rounded-t-2xl md:rounded-2xl border-t md:border border-slate-700 max-h-[95vh] overflow-y-auto">
+    <div class="p-5 border-b border-slate-800 flex items-center justify-between sticky top-0 bg-slate-900 z-10">
+      <div>
+        <h3 class="text-lg font-bold">Edit Booking</h3>
+        <p id="editModalSummary" class="text-xs text-slate-400">—</p>
+      </div>
+      <button id="closeEditModal" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center">✕</button>
+    </div>
+    <div class="p-5 space-y-4">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Date</label>
+          <input type="date" id="editDate" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Hour (0-23)</label>
+          <input type="number" min="0" max="23" id="editHour" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-2">Direction</label>
+        <div class="grid grid-cols-2 gap-2">
+          <button class="edit-dir-btn py-2.5 rounded-lg border-2 border-slate-700 font-semibold text-sm" data-dir="outbound">
+            <span class="text-ob-500">OUTBOUND</span>
+          </button>
+          <button class="edit-dir-btn py-2.5 rounded-lg border-2 border-slate-700 font-semibold text-sm" data-dir="inbound">
+            <span class="text-ib-500">INBOUND</span>
+          </button>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Status</label>
+        <select id="editStatus" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700">
+          <option value="booked">Booked</option>
+          <option value="arrived">Arrived (On Site)</option>
+          <option value="completed">Completed</option>
+          <option value="cancelled">Cancelled</option>
+          <option value="no_show">No Show</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Material</label>
+        <select id="editMaterial" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700"></select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Carrier</label>
+        <input id="editCarrier" type="text" list="carrierList" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">BOL #</label>
+          <input id="editBOL" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Release #</label>
+          <input id="editRelease" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">PO #</label>
+          <input id="editPO" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Truck ID</label>
+          <input id="editTruck" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Trailer ID</label>
+          <input id="editTrailer" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Notes</label>
+        <textarea id="editNotes" rows="2" class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm"></textarea>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">BOL Photo</label>
+        <div class="grid grid-cols-2 gap-2">
+          <input type="file" id="editPhotoCamera" accept="image/*" capture="environment" class="hidden">
+          <input type="file" id="editPhotoLibrary" accept="image/*" class="hidden">
+          <button id="editCameraBtn" class="py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 border-dashed text-sm font-semibold">📷 Take Photo</button>
+          <button id="editLibraryBtn" class="py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 border-dashed text-sm font-semibold">🖼️ Choose from Library</button>
+        </div>
+        <div id="editPhotoPreview" class="hidden mt-3">
+          <img id="editPhotoPreviewImg" class="w-full rounded-lg border border-slate-700" alt="BOL preview">
+          <button id="editRemovePhoto" class="mt-2 text-xs text-red-400 hover:text-red-300">Remove photo</button>
+        </div>
+        <div id="editUploadProgress" class="hidden mt-2 text-xs text-slate-400">Uploading…</div>
+      </div>
+      <div class="flex gap-2 pt-3 border-t border-slate-800">
+        <button id="editDelete" class="px-4 py-3 rounded-lg bg-red-900/50 hover:bg-red-900 text-red-300 font-bold text-sm">🗑️ Delete</button>
+        <button id="editSave" class="flex-1 py-3 rounded-lg bg-ob-600 hover:bg-ob-700 font-bold text-white">Save Changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="photoViewer" class="hidden fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4" onclick="this.classList.add('hidden')">
   <img id="photoViewerImg" class="max-w-full max-h-full rounded-lg" alt="BOL">
 </div>
 
-<!-- TOAST -->
 <div id="toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-lg shadow-2xl font-semibold text-sm toast-in"></div>
+
 
 <script>
 'use strict';
@@ -341,17 +451,28 @@ const DEFAULT_START_HOUR = 7;
 const DEFAULT_END_HOUR   = 17;
 const ADMIN_PIN = '2828';
 const BOL_BUCKET = 'bol-photos';
-const ADD_NEW_MATERIAL_VALUE = '__ADD_NEW__';
+const ADD_NEW_MATERIAL = '__ADD_NEW__';
 
 const App = {
     state: {
-        supabaseUrl: DEFAULT_SUPABASE_URL, supabaseKey: DEFAULT_SUPABASE_KEY,
-        startHour: DEFAULT_START_HOUR, endHour: DEFAULT_END_HOUR,
-        activeDate: new Date().toISOString().slice(0,10),
-        activeTab: 'book', adminUnlocked: false, adminSubtab: 'materials',
-        selectedSlot: null, selectedDir: null,
-        schedule: [], materials: [], carriers: [],
-        completingBooking: null, pendingBolPhoto: null,
+        supabaseUrl:  DEFAULT_SUPABASE_URL,
+        supabaseKey:  DEFAULT_SUPABASE_KEY,
+        startHour:    DEFAULT_START_HOUR,
+        endHour:      DEFAULT_END_HOUR,
+        activeDate:   new Date().toISOString().slice(0,10),
+        activeTab:    'book',
+        adminUnlocked: false,
+        adminSubtab: 'materials',
+        selectedSlot: null,
+        selectedDir:  null,
+        schedule:     [],
+        materials:    [],
+        carriers:     [],
+        completingBooking: null,
+        pendingBolPhoto: null,
+        editingBooking: null,
+        editDir: null,
+        editPendingPhoto: null,
     },
 
     init() {
@@ -361,7 +482,9 @@ const App = {
         this.loadMaterials();
         this.loadCarriers();
         this.loadSchedule();
-        setInterval(() => { if (this.state.activeTab === 'dashboard') this.loadSchedule(); }, 30000);
+        setInterval(() => {
+            if (this.state.activeTab === 'dashboard') this.loadSchedule();
+        }, 30000);
     },
 
     loadConfig() {
@@ -392,7 +515,8 @@ const App = {
         localStorage.setItem('dalmex_end_hr', eh);
         this.state.supabaseUrl = urlInput || DEFAULT_SUPABASE_URL;
         this.state.supabaseKey = keyInput || DEFAULT_SUPABASE_KEY;
-        this.state.startHour = sh; this.state.endHour = eh;
+        this.state.startHour = sh;
+        this.state.endHour = eh;
         document.getElementById('settingsStatus').textContent = '✓ Saved ' + new Date().toLocaleTimeString();
         this.updateConnStatus();
         this.toast('Settings saved', 'success');
@@ -402,7 +526,7 @@ const App = {
     resetConfig() {
         ['dalmex_sb_url','dalmex_sb_key','dalmex_start_hr','dalmex_end_hr'].forEach(k => localStorage.removeItem(k));
         this.loadConfig();
-        document.getElementById('settingsStatus').textContent = '✓ Reset to defaults';
+        document.getElementById('settingsStatus').textContent = '✓ Reset';
         this.toast('Reset to defaults', 'success');
         this.loadSchedule();
     },
@@ -499,7 +623,7 @@ const App = {
         if (!this.state.supabaseUrl || !this.state.supabaseKey) { this.renderSlotGrid(); return; }
         const d = new Date(this.state.activeDate + 'T00:00:00');
         const from = new Date(d); from.setDate(d.getDate() - 1);
-        const to = new Date(d); to.setDate(d.getDate() + 2);
+        const to   = new Date(d); to.setDate(d.getDate() + 2);
         const rows = await this.supabase(`schedule?time=gte.${from.toISOString()}&time=lt.${to.toISOString()}&order=time.asc`);
         this.state.schedule = rows || [];
         if (this.state.activeTab === 'book') this.renderSlotGrid();
@@ -508,10 +632,9 @@ const App = {
 
     renderSlotGrid() {
         const grid = document.getElementById('slotGrid');
-        const date = this.state.activeDate;
         const slots = [];
         for (let h = this.state.startHour; h < this.state.endHour; h++) {
-            slots.push({ hour: h, iso: this.localIsoForHour(date, h) });
+            slots.push({ hour: h, iso: this.localIsoForHour(this.state.activeDate, h) });
         }
         grid.innerHTML = slots.map(s => {
             const booking = this.state.schedule.find(r =>
@@ -521,7 +644,8 @@ const App = {
             const hourLabel = this.formatHour(s.hour);
             const hourEnd = this.formatHour(s.hour + 1);
             if (!booking) {
-                return `<button class="slot-btn p-4 rounded-xl bg-slate-800 border border-slate-700 hover:border-ob-500 text-left" data-slot="${s.iso}">
+                return `
+                <button class="slot-btn p-4 rounded-xl bg-slate-800 border border-slate-700 hover:border-ob-500 text-left" data-slot="${s.iso}">
                     <div class="text-sm font-mono text-slate-400">${hourLabel} – ${hourEnd}</div>
                     <div class="text-sm font-semibold text-slate-300 mt-1">Available</div>
                     <div class="text-xs text-slate-500 mt-0.5">Tap to book</div>
@@ -529,12 +653,13 @@ const App = {
             }
             const cls = booking.status === 'arrived' ? 'slot-arrived'
                       : booking.status === 'completed' ? 'slot-completed'
-                      : booking.direction === 'outbound' ? 'slot-booked-ob'
-                      : 'slot-booked-ib';
+                      : booking.direction === 'outbound' ? 'slot-booked-ob' : 'slot-booked-ib';
             const dirLabel = booking.direction === 'outbound' ? 'OUTBOUND' : 'INBOUND';
             const dirColor = booking.direction === 'outbound' ? 'text-ob-500' : 'text-ib-500';
-            const statusLabel = booking.status === 'arrived' ? '🟡 ON SITE' : booking.status === 'completed' ? '✓ DONE' : '📋 BOOKED';
-            return `<div class="slot-btn p-4 rounded-xl border-2 ${cls}">
+            const statusLabel = booking.status === 'arrived' ? '🟡 ON SITE'
+                              : booking.status === 'completed' ? '✓ DONE' : '📋 BOOKED';
+            return `
+            <div class="slot-btn p-4 rounded-xl border-2 ${cls}">
                 <div class="flex justify-between items-start">
                     <div class="text-sm font-mono text-slate-300">${hourLabel} – ${hourEnd}</div>
                     <div class="text-xs font-bold ${dirColor}">${dirLabel}</div>
@@ -554,12 +679,11 @@ const App = {
         this.state.selectedDir = null;
         const d = new Date(slotISO);
         const endD = new Date(d.getTime() + 60*60*1000);
-        document.getElementById('modalSlotTime').textContent = `${d.toLocaleDateString()} · ${this.formatHour(d.getHours())} – ${this.formatHour(endD.getHours())}`;
-        document.querySelectorAll('.dir-btn').forEach(b => b.classList.remove('border-ob-500','border-ib-500','bg-ob-900/30','bg-ib-900/30'));
+        document.getElementById('modalSlotTime').textContent =
+            `${d.toLocaleDateString()} · ${this.formatHour(d.getHours())} – ${this.formatHour(endD.getHours())}`;
+        document.querySelectorAll('.dir-btn').forEach(b => b.classList.remove('border-ob-500', 'border-ib-500', 'bg-ob-900/30', 'bg-ib-900/30'));
         document.getElementById('modalMaterial').innerHTML = '<option value="">-- Select direction first --</option>';
-        ['modalCarrier','modalBOL','modalRelease','modalPO','modalTruck','modalTrailer','modalNotes'].forEach(id => {
-            document.getElementById(id).value = '';
-        });
+        ['modalCarrier','modalBOL','modalRelease','modalPO','modalTruck','modalTrailer','modalNotes'].forEach(id => document.getElementById(id).value = '');
         this.updateConfirmBtn();
         document.getElementById('bookModal').classList.remove('hidden');
     },
@@ -573,58 +697,44 @@ const App = {
     selectDirection(dir) {
         this.state.selectedDir = dir;
         document.querySelectorAll('.dir-btn').forEach(b => {
-            b.classList.remove('border-ob-500','border-ib-500','bg-ob-900/30','bg-ib-900/30');
+            b.classList.remove('border-ob-500', 'border-ib-500', 'bg-ob-900/30', 'bg-ib-900/30');
             if (b.dataset.dir === dir) {
-                if (dir === 'outbound') b.classList.add('border-ob-500','bg-ob-900/30');
-                else b.classList.add('border-ib-500','bg-ib-900/30');
+                if (dir === 'outbound') b.classList.add('border-ob-500', 'bg-ob-900/30');
+                else b.classList.add('border-ib-500', 'bg-ib-900/30');
             }
         });
         const btn = document.getElementById('confirmBook');
-        btn.classList.remove('bg-ob-600','hover:bg-ob-700','bg-ib-600','hover:bg-ib-700');
-        if (dir === 'outbound') btn.classList.add('bg-ob-600','hover:bg-ob-700');
-        else btn.classList.add('bg-ib-600','hover:bg-ib-700');
+        btn.classList.remove('bg-ob-600', 'hover:bg-ob-700', 'bg-ib-600', 'hover:bg-ib-700');
+        if (dir === 'outbound') btn.classList.add('bg-ob-600', 'hover:bg-ob-700');
+        else btn.classList.add('bg-ib-600', 'hover:bg-ib-700');
         this.renderMaterialDropdown();
         this.updateConfirmBtn();
     },
 
     renderMaterialDropdown() {
         const sel = document.getElementById('modalMaterial');
-        if (!this.state.selectedDir) {
-            sel.innerHTML = '<option value="">-- Select direction first --</option>';
-            return;
-        }
+        if (!this.state.selectedDir) { sel.innerHTML = '<option value="">-- Select direction first --</option>'; return; }
         const items = this.state.materials.filter(m => m.active && (m.direction === this.state.selectedDir || m.direction === 'both'));
         sel.innerHTML =
             '<option value="">-- Select material --</option>' +
             items.map(m => `<option value="${this.esc(m.name)}">${this.esc(m.name)}</option>`).join('') +
-            `<option value="${ADD_NEW_MATERIAL_VALUE}">➕ Add new material…</option>`;
+            `<option value="${ADD_NEW_MATERIAL}">➕ Add new material…</option>`;
     },
 
     renderCarrierDatalist() {
-        const dl = document.getElementById('carrierList');
-        dl.innerHTML = this.state.carriers.filter(c => c.active).map(c => `<option value="${this.esc(c.name)}">`).join('');
+        document.getElementById('carrierList').innerHTML = this.state.carriers.filter(c => c.active)
+            .map(c => `<option value="${this.esc(c.name)}">`).join('');
     },
 
     async handleMaterialChange() {
         const sel = document.getElementById('modalMaterial');
-        if (sel.value === ADD_NEW_MATERIAL_VALUE) {
+        if (sel.value === ADD_NEW_MATERIAL) {
             const name = prompt('New material name:');
             if (!name || !name.trim()) { sel.value = ''; this.updateConfirmBtn(); return; }
             const trimmed = name.trim();
-            const existing = this.state.materials.find(m =>
-                m.name.toLowerCase() === trimmed.toLowerCase() &&
-                (m.direction === this.state.selectedDir || m.direction === 'both')
-            );
-            if (existing) {
-                await this.loadMaterials();
-                sel.value = existing.name;
-                this.toast('Material already exists — selected it', 'info');
-                this.updateConfirmBtn();
-                return;
-            }
-            const res = await this.supabase('materials', 'POST', {
-                name: trimmed, direction: this.state.selectedDir, sort_order: 500,
-            });
+            const existing = this.state.materials.find(m => m.name.toLowerCase() === trimmed.toLowerCase() && (m.direction === this.state.selectedDir || m.direction === 'both'));
+            if (existing) { sel.value = existing.name; this.toast('Already exists — selected it', 'info'); this.updateConfirmBtn(); return; }
+            const res = await this.supabase('materials', 'POST', { name: trimmed, direction: this.state.selectedDir, sort_order: 500 });
             if (res && res.length) {
                 this.toast('✓ Material added', 'success');
                 await this.loadMaterials();
@@ -640,13 +750,13 @@ const App = {
     updateConfirmBtn() {
         const mat = document.getElementById('modalMaterial').value.trim();
         const car = document.getElementById('modalCarrier').value.trim();
-        const validMat = mat && mat !== ADD_NEW_MATERIAL_VALUE;
-        document.getElementById('confirmBook').disabled = !(this.state.selectedDir && validMat && car);
+        document.getElementById('confirmBook').disabled = !(this.state.selectedDir && mat && mat !== ADD_NEW_MATERIAL && car);
     },
 
     async confirmBooking() {
         const btn = document.getElementById('confirmBook');
-        btn.disabled = true; btn.textContent = 'Booking…';
+        btn.disabled = true;
+        btn.textContent = 'Booking…';
         const payload = {
             time: this.state.selectedSlot,
             direction: this.state.selectedDir,
@@ -662,18 +772,18 @@ const App = {
         };
         payload.booking_hash = await this.generateBookingHash(payload);
         const res = await this.supabase('schedule', 'POST', payload);
-        btn.disabled = false; btn.textContent = 'Confirm Booking';
+        btn.disabled = false;
+        btn.textContent = 'Confirm Booking';
         if (res && res.length) {
-            const carName = payload.carrier;
-            if (carName && !this.state.carriers.find(c => c.name.toLowerCase() === carName.toLowerCase())) {
-                await this.supabase('carriers', 'POST', { name: carName, sort_order: 500 });
+            if (payload.carrier && !this.state.carriers.find(c => c.name.toLowerCase() === payload.carrier.toLowerCase())) {
+                await this.supabase('carriers', 'POST', { name: payload.carrier, sort_order: 500 });
                 this.loadCarriers();
             }
             this.toast('✓ Booking confirmed', 'success');
             this.closeBookModal();
             await this.loadSchedule();
         } else {
-            this.toast('Slot may already be taken — refresh', 'error');
+            this.toast('Slot may already be taken', 'error');
             await this.loadSchedule();
         }
     },
@@ -692,10 +802,16 @@ const App = {
         document.getElementById('statIB').textContent = ib;
         document.getElementById('statArrived').textContent = arrived;
         document.getElementById('statDone').textContent = done;
+
+        document.getElementById('adminIndicator').classList.toggle('hidden', !this.state.adminUnlocked);
+
         const list = document.getElementById('dashList');
         const empty = document.getElementById('dashEmpty');
         if (!rows.length) { list.innerHTML=''; empty.classList.remove('hidden'); return; }
         empty.classList.add('hidden');
+
+        const isAdmin = this.state.adminUnlocked;
+
         list.innerHTML = rows.map(r => {
             const t = new Date(r.time);
             const hourLabel = this.formatHour(t.getHours());
@@ -706,12 +822,14 @@ const App = {
             let statusBadge, actionBtns;
             if (r.status === 'booked') {
                 statusBadge = '<span class="px-2 py-0.5 rounded-full bg-slate-700 text-slate-300 text-xs font-semibold">BOOKED</span>';
-                actionBtns = `<button class="act-btn px-3 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold" data-id="${r.id}" data-action="arrived">Mark Arrived</button>
-                              <button class="act-btn px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold" data-id="${r.id}" data-action="cancelled">Cancel</button>`;
+                actionBtns = `
+                    <button class="act-btn px-3 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold" data-id="${r.id}" data-action="arrived">Mark Arrived</button>
+                    <button class="act-btn px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold" data-id="${r.id}" data-action="cancelled">Cancel</button>`;
             } else if (r.status === 'arrived') {
                 statusBadge = '<span class="px-2 py-0.5 rounded-full bg-amber-600 text-white text-xs font-bold pulse-dot">ON SITE</span>';
-                actionBtns = `<button class="act-btn px-3 py-2 rounded-lg bg-ob-600 hover:bg-ob-700 text-white text-xs font-bold" data-id="${r.id}" data-action="complete">Mark Complete</button>
-                              <button class="act-btn px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold" data-id="${r.id}" data-action="booked">Undo</button>`;
+                actionBtns = `
+                    <button class="act-btn px-3 py-2 rounded-lg bg-ob-600 hover:bg-ob-700 text-white text-xs font-bold" data-id="${r.id}" data-action="complete">Mark Complete</button>
+                    <button class="act-btn px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold" data-id="${r.id}" data-action="booked">Undo</button>`;
             } else if (r.status === 'completed') {
                 statusBadge = '<span class="px-2 py-0.5 rounded-full bg-ob-700 text-white text-xs font-bold">COMPLETED</span>';
                 actionBtns = `<button class="act-btn px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold" data-id="${r.id}" data-action="complete">Edit BOL</button>
@@ -720,6 +838,11 @@ const App = {
                 statusBadge = `<span class="px-2 py-0.5 rounded-full bg-red-900/50 text-red-300 text-xs font-semibold">${r.status.toUpperCase()}</span>`;
                 actionBtns = `<button class="act-btn px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold" data-id="${r.id}" data-action="booked">Restore</button>`;
             }
+            // Admin edit button (separate)
+            const adminBtn = isAdmin
+                ? `<button class="edit-btn px-3 py-2 rounded-lg bg-ob-900/40 hover:bg-ob-900 text-ob-500 text-xs font-bold border border-ob-700" data-id="${r.id}">✏️ Edit</button>`
+                : '';
+
             const bolBits = [];
             if (r.bol_number) bolBits.push(`BOL ${this.esc(r.bol_number)}`);
             if (r.release_number) bolBits.push(`Rel ${this.esc(r.release_number)}`);
@@ -728,8 +851,10 @@ const App = {
             if (r.trailer_id) bolBits.push(`Trlr ${this.esc(r.trailer_id)}`);
             const bolLine = bolBits.length ? `<div class="text-xs text-slate-500 mt-1 font-mono">${bolBits.join(' · ')}</div>` : '';
             const photoThumb = r.bol_photo_url
-                ? `<img src="${this.esc(r.bol_photo_url)}" class="bol-thumb w-14 h-14 rounded-lg border border-slate-600 object-cover cursor-pointer" data-photo="${this.esc(r.bol_photo_url)}" alt="BOL">` : '';
-            return `<div class="bg-slate-800 rounded-lg p-4 border border-slate-700 flex items-center gap-4 flex-wrap">
+                ? `<img src="${this.esc(r.bol_photo_url)}" class="bol-thumb w-14 h-14 rounded-lg border border-slate-600 object-cover cursor-pointer" data-photo="${this.esc(r.bol_photo_url)}" alt="BOL">`
+                : '';
+            return `
+            <div class="bg-slate-800 rounded-lg p-4 border border-slate-700 flex items-center gap-4 flex-wrap">
                 <div class="w-1.5 h-14 rounded-full ${dirColor}"></div>
                 <div class="min-w-[110px]">
                     <div class="font-mono font-bold text-lg">${hourLabel}</div>
@@ -746,14 +871,19 @@ const App = {
                     ${r.notes ? `<div class="text-xs text-slate-500 mt-1 italic">"${this.esc(r.notes)}"</div>` : ''}
                 </div>
                 ${photoThumb}
-                <div class="flex gap-2 flex-wrap">${actionBtns}</div>
+                <div class="flex gap-2 flex-wrap">${actionBtns} ${adminBtn}</div>
             </div>`;
         }).join('');
+
         list.querySelectorAll('.act-btn').forEach(b => {
             b.addEventListener('click', () => {
-                if (b.dataset.action === 'complete') this.openCompleteModal(b.dataset.id);
-                else this.updateStatus(b.dataset.id, b.dataset.action);
+                const id = b.dataset.id, action = b.dataset.action;
+                if (action === 'complete') this.openCompleteModal(id);
+                else this.updateStatus(id, action);
             });
+        });
+        list.querySelectorAll('.edit-btn').forEach(b => {
+            b.addEventListener('click', () => this.openEditModal(b.dataset.id));
         });
         list.querySelectorAll('[data-photo]').forEach(img => {
             img.addEventListener('click', e => {
@@ -773,6 +903,7 @@ const App = {
         if (res) { this.toast(`Status → ${newStatus.toUpperCase()}`, 'success'); await this.loadSchedule(); }
     },
 
+    // ─── COMPLETE MODAL ─────────────────────────────────────
     openCompleteModal(bookingId) {
         const booking = this.state.schedule.find(r => String(r.id) === String(bookingId));
         if (!booking) return;
@@ -791,7 +922,8 @@ const App = {
             preview.classList.add('hidden');
         }
         document.getElementById('bolUploadProgress').classList.add('hidden');
-        document.getElementById('bolPhotoInput').value = '';
+        document.getElementById('bolPhotoCamera').value = '';
+        document.getElementById('bolPhotoLibrary').value = '';
         document.getElementById('completeModal').classList.remove('hidden');
     },
 
@@ -812,7 +944,8 @@ const App = {
 
     removeBolPhoto() {
         this.state.pendingBolPhoto = null;
-        document.getElementById('bolPhotoInput').value = '';
+        document.getElementById('bolPhotoCamera').value = '';
+        document.getElementById('bolPhotoLibrary').value = '';
         document.getElementById('bolPhotoPreview').classList.add('hidden');
         if (this.state.completingBooking) {
             this.state.completingBooking.bol_photo_url = null;
@@ -824,7 +957,8 @@ const App = {
         const booking = this.state.completingBooking;
         if (!booking) return;
         const btn = document.getElementById('confirmComplete');
-        btn.disabled = true; btn.textContent = 'Saving…';
+        btn.disabled = true;
+        btn.textContent = 'Saving…';
         const patch = {
             status: 'completed',
             completed_at: new Date().toISOString(),
@@ -846,23 +980,192 @@ const App = {
             patch.bol_photo_path = null;
         }
         const res = await this.supabase(`schedule?id=eq.${booking.id}`, 'PATCH', patch);
-        btn.disabled = false; btn.textContent = 'Mark Complete';
+        btn.disabled = false;
+        btn.textContent = 'Mark Complete';
+        if (res) { this.toast('✓ Load completed', 'success'); this.closeCompleteModal(); await this.loadSchedule(); }
+    },
+
+    // ─── EDIT MODAL (ADMIN) ─────────────────────────────────
+    openEditModal(bookingId) {
+        const booking = this.state.schedule.find(r => String(r.id) === String(bookingId));
+        if (!booking) return;
+        this.state.editingBooking = booking;
+        this.state.editDir = booking.direction;
+        this.state.editPendingPhoto = null;
+
+        document.getElementById('editModalSummary').textContent = `ID ${booking.id} · ${booking.carrier}`;
+
+        const d = new Date(booking.time);
+        document.getElementById('editDate').value = booking.time.slice(0,10);
+        document.getElementById('editHour').value = d.getHours();
+        document.getElementById('editStatus').value = booking.status;
+        document.getElementById('editCarrier').value = booking.carrier || '';
+        document.getElementById('editBOL').value = booking.bol_number || '';
+        document.getElementById('editRelease').value = booking.release_number || '';
+        document.getElementById('editPO').value = booking.po_number || '';
+        document.getElementById('editTruck').value = booking.truck_id || '';
+        document.getElementById('editTrailer').value = booking.trailer_id || '';
+        document.getElementById('editNotes').value = booking.notes || '';
+
+        this.setEditDirection(booking.direction);
+
+        // Ensure material dropdown contains the current value even if material was deleted
+        const sel = document.getElementById('editMaterial');
+        const items = this.state.materials.filter(m => m.active && (m.direction === booking.direction || m.direction === 'both'));
+        let opts = '<option value="">-- Select material --</option>' +
+            items.map(m => `<option value="${this.esc(m.name)}">${this.esc(m.name)}</option>`).join('');
+        if (booking.material && !items.find(m => m.name === booking.material)) {
+            opts += `<option value="${this.esc(booking.material)}">${this.esc(booking.material)} (legacy)</option>`;
+        }
+        sel.innerHTML = opts;
+        sel.value = booking.material || '';
+
+        const preview = document.getElementById('editPhotoPreview');
+        if (booking.bol_photo_url) {
+            document.getElementById('editPhotoPreviewImg').src = booking.bol_photo_url;
+            preview.classList.remove('hidden');
+        } else {
+            preview.classList.add('hidden');
+        }
+        document.getElementById('editUploadProgress').classList.add('hidden');
+        document.getElementById('editPhotoCamera').value = '';
+        document.getElementById('editPhotoLibrary').value = '';
+        document.getElementById('editModal').classList.remove('hidden');
+    },
+
+    closeEditModal() {
+        document.getElementById('editModal').classList.add('hidden');
+        this.state.editingBooking = null;
+        this.state.editDir = null;
+        this.state.editPendingPhoto = null;
+    },
+
+    setEditDirection(dir) {
+        this.state.editDir = dir;
+        document.querySelectorAll('.edit-dir-btn').forEach(b => {
+            b.classList.remove('border-ob-500', 'border-ib-500', 'bg-ob-900/30', 'bg-ib-900/30');
+            if (b.dataset.dir === dir) {
+                if (dir === 'outbound') b.classList.add('border-ob-500', 'bg-ob-900/30');
+                else b.classList.add('border-ib-500', 'bg-ib-900/30');
+            }
+        });
+        // Refresh material dropdown for new direction
+        const sel = document.getElementById('editMaterial');
+        const currentValue = sel.value;
+        const items = this.state.materials.filter(m => m.active && (m.direction === dir || m.direction === 'both'));
+        let opts = '<option value="">-- Select material --</option>' +
+            items.map(m => `<option value="${this.esc(m.name)}">${this.esc(m.name)}</option>`).join('');
+        if (currentValue && !items.find(m => m.name === currentValue)) {
+            opts += `<option value="${this.esc(currentValue)}">${this.esc(currentValue)} (legacy)</option>`;
+        }
+        sel.innerHTML = opts;
+        sel.value = currentValue;
+    },
+
+    handleEditPhotoSelect(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const previewUrl = URL.createObjectURL(file);
+        document.getElementById('editPhotoPreviewImg').src = previewUrl;
+        document.getElementById('editPhotoPreview').classList.remove('hidden');
+        this.state.editPendingPhoto = { file, previewUrl };
+    },
+
+    removeEditPhoto() {
+        this.state.editPendingPhoto = null;
+        document.getElementById('editPhotoCamera').value = '';
+        document.getElementById('editPhotoLibrary').value = '';
+        document.getElementById('editPhotoPreview').classList.add('hidden');
+        if (this.state.editingBooking) {
+            this.state.editingBooking.bol_photo_url = null;
+            this.state.editingBooking.bol_photo_path = null;
+        }
+    },
+
+    async saveEditedBooking() {
+        const booking = this.state.editingBooking;
+        if (!booking) return;
+        const btn = document.getElementById('editSave');
+        btn.disabled = true;
+        btn.textContent = 'Saving…';
+
+        const dateStr = document.getElementById('editDate').value;
+        const hour = parseInt(document.getElementById('editHour').value, 10);
+        const material = document.getElementById('editMaterial').value.trim();
+        const carrier = document.getElementById('editCarrier').value.trim();
+        const newStatus = document.getElementById('editStatus').value;
+
+        if (!dateStr || isNaN(hour) || hour < 0 || hour > 23) { this.toast('Invalid date/hour', 'error'); btn.disabled=false; btn.textContent='Save Changes'; return; }
+        if (!material || !carrier) { this.toast('Material and carrier required', 'error'); btn.disabled=false; btn.textContent='Save Changes'; return; }
+
+        const newTime = this.localIsoForHour(dateStr, hour);
+
+        const patch = {
+            time: newTime,
+            direction: this.state.editDir,
+            status: newStatus,
+            material: material,
+            carrier: carrier,
+            bol_number: document.getElementById('editBOL').value.trim() || null,
+            release_number: document.getElementById('editRelease').value.trim() || null,
+            po_number: document.getElementById('editPO').value.trim() || null,
+            truck_id: document.getElementById('editTruck').value.trim() || null,
+            trailer_id: document.getElementById('editTrailer').value.trim() || null,
+            notes: document.getElementById('editNotes').value.trim() || null,
+        };
+
+        // Timestamp fields based on status
+        if (newStatus === 'arrived' && !booking.arrived_at) patch.arrived_at = new Date().toISOString();
+        if (newStatus === 'completed' && !booking.completed_at) patch.completed_at = new Date().toISOString();
+        if (newStatus === 'booked') { patch.arrived_at = null; patch.completed_at = null; }
+        if (newStatus === 'cancelled' || newStatus === 'no_show') { /* leave timestamps as-is */ }
+
+        // Handle photo
+        if (this.state.editPendingPhoto) {
+            document.getElementById('editUploadProgress').classList.remove('hidden');
+            const up = await this.uploadBolPhoto(this.state.editPendingPhoto.file, booking.id);
+            document.getElementById('editUploadProgress').classList.add('hidden');
+            if (up) {
+                patch.bol_photo_url = up.publicUrl;
+                patch.bol_photo_path = up.path;
+            }
+        } else if (booking.bol_photo_url === null || booking.bol_photo_url === undefined) {
+            patch.bol_photo_url = null;
+            patch.bol_photo_path = null;
+        }
+
+        const res = await this.supabase(`schedule?id=eq.${booking.id}`, 'PATCH', patch);
+        btn.disabled = false;
+        btn.textContent = 'Save Changes';
         if (res) {
-            this.toast('✓ Load completed', 'success');
-            this.closeCompleteModal();
+            this.toast('✓ Booking updated', 'success');
+            this.closeEditModal();
             await this.loadSchedule();
         }
     },
 
+    async deleteBooking() {
+        const booking = this.state.editingBooking;
+        if (!booking) return;
+        if (!confirm(`Permanently delete this booking?\n\n${booking.carrier} · ${booking.material}\n${new Date(booking.time).toLocaleString()}\n\nThis cannot be undone.`)) return;
+        const res = await this.supabase(`schedule?id=eq.${booking.id}`, 'DELETE');
+        if (res !== null) {
+            this.toast('✓ Booking deleted', 'success');
+            this.closeEditModal();
+            await this.loadSchedule();
+        }
+    },
+
+    // ─── ADMIN PIN / SUBTABS ────────────────────────────────
     trySubmitPin() {
-        const val = document.getElementById('pinInput').value.trim();
-        if (val === ADMIN_PIN) {
+        if (document.getElementById('pinInput').value.trim() === ADMIN_PIN) {
             this.state.adminUnlocked = true;
             document.getElementById('adminGate').classList.add('hidden');
             document.getElementById('adminContent').classList.remove('hidden');
             document.getElementById('pinError').classList.add('hidden');
             document.getElementById('pinInput').value = '';
             this.switchAdminSubtab(this.state.adminSubtab);
+            if (this.state.activeTab === 'dashboard') this.renderDashboard();
         } else {
             document.getElementById('pinError').classList.remove('hidden');
             document.getElementById('pinInput').value = '';
@@ -873,16 +1176,17 @@ const App = {
         this.state.adminUnlocked = false;
         document.getElementById('adminGate').classList.remove('hidden');
         document.getElementById('adminContent').classList.add('hidden');
+        if (this.state.activeTab === 'dashboard') this.renderDashboard();
     },
 
     switchAdminSubtab(sub) {
         this.state.adminSubtab = sub;
         document.querySelectorAll('.admin-subtab').forEach(b => {
-            b.classList.remove('border-ob-500','text-slate-100');
-            b.classList.add('border-transparent','text-slate-400');
+            b.classList.remove('border-ob-500', 'text-slate-100');
+            b.classList.add('border-transparent', 'text-slate-400');
             if (b.dataset.subtab === sub) {
-                b.classList.add('border-ob-500','text-slate-100');
-                b.classList.remove('border-transparent','text-slate-400');
+                b.classList.add('border-ob-500', 'text-slate-100');
+                b.classList.remove('border-transparent', 'text-slate-400');
             }
         });
         document.querySelectorAll('.admin-subpanel').forEach(p => p.classList.add('hidden'));
@@ -899,11 +1203,12 @@ const App = {
             both:     this.state.materials.filter(m => m.direction === 'both'),
         };
         list.innerHTML = ['outbound','inbound','both'].filter(k => groups[k].length).map(k => {
-            const label = k === 'outbound' ? 'OUTBOUND (Bales)' : k === 'inbound' ? 'INBOUND' : 'BOTH DIRECTIONS';
+            const label = k === 'outbound' ? 'OUTBOUND (Bales)' : k === 'inbound' ? 'INBOUND' : 'BOTH';
             const color = k === 'outbound' ? 'text-ob-500' : k === 'inbound' ? 'text-ib-500' : 'text-slate-400';
-            return `<div class="mt-3 mb-1 text-xs font-bold uppercase tracking-wide ${color}">${label}</div>
+            return `
+            <div class="mt-3 mb-1 text-xs font-bold uppercase tracking-wide ${color}">${label}</div>
             ${groups[k].map(m => `
-                <div class="bg-slate-800 rounded-lg p-3 border border-slate-700 flex items-center gap-3 ${m.active ? '' : 'inactive-row'}" data-id="${m.id}">
+                <div class="bg-slate-800 rounded-lg p-3 border border-slate-700 flex items-center gap-3 ${m.active ? '' : 'inactive-row'}">
                     <div class="flex-1 font-semibold">${this.esc(m.name)}</div>
                     <button class="mat-toggle px-2 py-1 rounded text-xs font-semibold ${m.active ? 'bg-ob-900/50 text-ob-500' : 'bg-slate-700 text-slate-400'}" data-id="${m.id}" data-active="${m.active}">${m.active ? 'Active' : 'Inactive'}</button>
                     <button class="mat-edit px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-xs" data-id="${m.id}">Edit</button>
@@ -922,34 +1227,28 @@ const App = {
         const res = await this.supabase('materials', 'POST', { name, direction: dir, sort_order: 500 });
         if (res) { document.getElementById('newMatName').value = ''; this.toast('✓ Material added', 'success'); await this.loadMaterials(); }
     },
-
-    async toggleMaterial(id, currentlyActive) {
-        const res = await this.supabase(`materials?id=eq.${id}`, 'PATCH', { active: !currentlyActive });
-        if (res) await this.loadMaterials();
-    },
-
+    async toggleMaterial(id, active) { const r = await this.supabase(`materials?id=eq.${id}`, 'PATCH', { active: !active }); if (r) await this.loadMaterials(); },
     async editMaterial(id) {
-        const mat = this.state.materials.find(m => String(m.id) === String(id));
-        if (!mat) return;
-        const newName = prompt('Rename material:', mat.name);
-        if (newName === null || !newName.trim() || newName.trim() === mat.name) return;
-        const res = await this.supabase(`materials?id=eq.${id}`, 'PATCH', { name: newName.trim() });
-        if (res) { this.toast('✓ Renamed', 'success'); await this.loadMaterials(); }
+        const m = this.state.materials.find(x => String(x.id) === String(id));
+        if (!m) return;
+        const n = prompt('Rename material:', m.name);
+        if (n === null || !n.trim() || n.trim() === m.name) return;
+        const r = await this.supabase(`materials?id=eq.${id}`, 'PATCH', { name: n.trim() });
+        if (r) { this.toast('✓ Renamed', 'success'); await this.loadMaterials(); }
     },
-
     async deleteMaterial(id) {
-        const mat = this.state.materials.find(m => String(m.id) === String(id));
-        if (!mat) return;
-        if (!confirm(`Delete "${mat.name}"?\n\nPast bookings will keep their record.`)) return;
-        const res = await this.supabase(`materials?id=eq.${id}`, 'DELETE');
-        if (res !== null) { this.toast('✓ Deleted', 'success'); await this.loadMaterials(); }
+        const m = this.state.materials.find(x => String(x.id) === String(id));
+        if (!m) return;
+        if (!confirm(`Delete "${m.name}"?`)) return;
+        const r = await this.supabase(`materials?id=eq.${id}`, 'DELETE');
+        if (r !== null) { this.toast('✓ Deleted', 'success'); await this.loadMaterials(); }
     },
 
     renderCarriersAdmin() {
         const list = document.getElementById('carList');
         if (!this.state.carriers.length) { list.innerHTML = '<div class="text-center py-8 text-slate-500 text-sm">No carriers yet.</div>'; return; }
         list.innerHTML = this.state.carriers.map(c => `
-            <div class="bg-slate-800 rounded-lg p-3 border border-slate-700 flex items-center gap-3 ${c.active ? '' : 'inactive-row'}" data-id="${c.id}">
+            <div class="bg-slate-800 rounded-lg p-3 border border-slate-700 flex items-center gap-3 ${c.active ? '' : 'inactive-row'}">
                 <div class="flex-1 font-semibold">${this.esc(c.name)}</div>
                 <button class="car-toggle px-2 py-1 rounded text-xs font-semibold ${c.active ? 'bg-ob-900/50 text-ob-500' : 'bg-slate-700 text-slate-400'}" data-id="${c.id}" data-active="${c.active}">${c.active ? 'Active' : 'Inactive'}</button>
                 <button class="car-edit px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-xs" data-id="${c.id}">Edit</button>
@@ -963,30 +1262,24 @@ const App = {
     async addCarrier() {
         const name = document.getElementById('newCarName').value.trim();
         if (!name) { this.toast('Name required', 'error'); return; }
-        const res = await this.supabase('carriers', 'POST', { name, sort_order: 500 });
-        if (res) { document.getElementById('newCarName').value = ''; this.toast('✓ Carrier added', 'success'); await this.loadCarriers(); }
+        const r = await this.supabase('carriers', 'POST', { name, sort_order: 500 });
+        if (r) { document.getElementById('newCarName').value = ''; this.toast('✓ Carrier added', 'success'); await this.loadCarriers(); }
     },
-
-    async toggleCarrier(id, currentlyActive) {
-        const res = await this.supabase(`carriers?id=eq.${id}`, 'PATCH', { active: !currentlyActive });
-        if (res) await this.loadCarriers();
-    },
-
+    async toggleCarrier(id, active) { const r = await this.supabase(`carriers?id=eq.${id}`, 'PATCH', { active: !active }); if (r) await this.loadCarriers(); },
     async editCarrier(id) {
-        const car = this.state.carriers.find(c => String(c.id) === String(id));
-        if (!car) return;
-        const newName = prompt('Rename carrier:', car.name);
-        if (newName === null || !newName.trim() || newName.trim() === car.name) return;
-        const res = await this.supabase(`carriers?id=eq.${id}`, 'PATCH', { name: newName.trim() });
-        if (res) { this.toast('✓ Renamed', 'success'); await this.loadCarriers(); }
+        const c = this.state.carriers.find(x => String(x.id) === String(id));
+        if (!c) return;
+        const n = prompt('Rename carrier:', c.name);
+        if (n === null || !n.trim() || n.trim() === c.name) return;
+        const r = await this.supabase(`carriers?id=eq.${id}`, 'PATCH', { name: n.trim() });
+        if (r) { this.toast('✓ Renamed', 'success'); await this.loadCarriers(); }
     },
-
     async deleteCarrier(id) {
-        const car = this.state.carriers.find(c => String(c.id) === String(id));
-        if (!car) return;
-        if (!confirm(`Delete "${car.name}"?\n\nPast bookings will keep their record.`)) return;
-        const res = await this.supabase(`carriers?id=eq.${id}`, 'DELETE');
-        if (res !== null) { this.toast('✓ Deleted', 'success'); await this.loadCarriers(); }
+        const c = this.state.carriers.find(x => String(x.id) === String(id));
+        if (!c) return;
+        if (!confirm(`Delete "${c.name}"?`)) return;
+        const r = await this.supabase(`carriers?id=eq.${id}`, 'DELETE');
+        if (r !== null) { this.toast('✓ Deleted', 'success'); await this.loadCarriers(); }
     },
 
     switchTab(tab) {
@@ -994,10 +1287,7 @@ const App = {
         document.querySelectorAll('.tab-btn').forEach(b => {
             b.classList.remove('tab-active');
             b.classList.add('text-slate-400');
-            if (b.dataset.tab === tab) {
-                b.classList.add('tab-active');
-                b.classList.remove('text-slate-400');
-            }
+            if (b.dataset.tab === tab) { b.classList.add('tab-active'); b.classList.remove('text-slate-400'); }
         });
         document.querySelectorAll('.tab-content').forEach(s => s.classList.add('hidden'));
         document.getElementById(tab + 'Tab').classList.remove('hidden');
@@ -1018,28 +1308,52 @@ const App = {
 
     bindEvents() {
         document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => this.switchTab(b.dataset.tab)));
+
         document.getElementById('bookDate').addEventListener('change', e => { this.state.activeDate = e.target.value; this.loadSchedule(); });
         document.getElementById('prevDay').addEventListener('click', () => this.shiftDay(-1));
         document.getElementById('nextDay').addEventListener('click', () => this.shiftDay(1));
+
+        // Booking modal
         document.getElementById('closeModal').addEventListener('click', () => this.closeBookModal());
         document.getElementById('bookModal').addEventListener('click', e => { if (e.target.id === 'bookModal') this.closeBookModal(); });
         document.querySelectorAll('.dir-btn').forEach(b => b.addEventListener('click', () => this.selectDirection(b.dataset.dir)));
         document.getElementById('modalMaterial').addEventListener('change', () => this.handleMaterialChange());
         document.getElementById('modalCarrier').addEventListener('input', () => this.updateConfirmBtn());
         document.getElementById('confirmBook').addEventListener('click', () => this.confirmBooking());
+
+        // Complete modal — NEW: dual photo buttons
         document.getElementById('closeCompleteModal').addEventListener('click', () => this.closeCompleteModal());
         document.getElementById('completeModal').addEventListener('click', e => { if (e.target.id === 'completeModal') this.closeCompleteModal(); });
-        document.getElementById('bolPhotoBtn').addEventListener('click', () => document.getElementById('bolPhotoInput').click());
-        document.getElementById('bolPhotoInput').addEventListener('change', e => this.handleBolPhotoSelect(e));
+        document.getElementById('bolCameraBtn').addEventListener('click', () => document.getElementById('bolPhotoCamera').click());
+        document.getElementById('bolLibraryBtn').addEventListener('click', () => document.getElementById('bolPhotoLibrary').click());
+        document.getElementById('bolPhotoCamera').addEventListener('change', e => this.handleBolPhotoSelect(e));
+        document.getElementById('bolPhotoLibrary').addEventListener('change', e => this.handleBolPhotoSelect(e));
         document.getElementById('removeBolPhoto').addEventListener('click', () => this.removeBolPhoto());
         document.getElementById('confirmComplete').addEventListener('click', () => this.confirmComplete());
+
+        // Edit modal
+        document.getElementById('closeEditModal').addEventListener('click', () => this.closeEditModal());
+        document.getElementById('editModal').addEventListener('click', e => { if (e.target.id === 'editModal') this.closeEditModal(); });
+        document.querySelectorAll('.edit-dir-btn').forEach(b => b.addEventListener('click', () => this.setEditDirection(b.dataset.dir)));
+        document.getElementById('editCameraBtn').addEventListener('click', () => document.getElementById('editPhotoCamera').click());
+        document.getElementById('editLibraryBtn').addEventListener('click', () => document.getElementById('editPhotoLibrary').click());
+        document.getElementById('editPhotoCamera').addEventListener('change', e => this.handleEditPhotoSelect(e));
+        document.getElementById('editPhotoLibrary').addEventListener('change', e => this.handleEditPhotoSelect(e));
+        document.getElementById('editRemovePhoto').addEventListener('click', () => this.removeEditPhoto());
+        document.getElementById('editSave').addEventListener('click', () => this.saveEditedBooking());
+        document.getElementById('editDelete').addEventListener('click', () => this.deleteBooking());
+
         document.getElementById('refreshDash').addEventListener('click', () => this.loadSchedule());
+
+        // Admin
         document.getElementById('pinSubmit').addEventListener('click', () => this.trySubmitPin());
         document.getElementById('pinInput').addEventListener('keypress', e => { if (e.key === 'Enter') this.trySubmitPin(); });
         document.getElementById('adminLock').addEventListener('click', () => this.lockAdmin());
         document.querySelectorAll('.admin-subtab').forEach(b => b.addEventListener('click', () => this.switchAdminSubtab(b.dataset.subtab)));
         document.getElementById('addMatBtn').addEventListener('click', () => this.addMaterial());
         document.getElementById('addCarBtn').addEventListener('click', () => this.addCarrier());
+
+        // Settings
         document.getElementById('saveSettings').addEventListener('click', () => this.saveConfig());
         document.getElementById('resetSettings').addEventListener('click', () => this.resetConfig());
     },
