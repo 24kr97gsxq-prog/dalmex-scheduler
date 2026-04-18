@@ -50,6 +50,9 @@
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: #1e293b; }
   ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+  .inactive-row { opacity: 0.5; }
+  .bol-thumb { transition: transform 0.15s ease; }
+  .bol-thumb:active { transform: scale(0.95); }
 </style>
 </head>
 
@@ -69,15 +72,17 @@
     </div>
   </div>
 
-  <div class="max-w-6xl mx-auto px-4 flex gap-1 border-t border-slate-800">
-    <button class="tab-btn tab-active px-4 py-2.5 text-sm font-semibold" data-tab="book">Book a Slot</button>
-    <button class="tab-btn px-4 py-2.5 text-sm font-semibold text-slate-400 hover:text-slate-200" data-tab="dashboard">Yard Dashboard</button>
-    <button class="tab-btn px-4 py-2.5 text-sm font-semibold text-slate-400 hover:text-slate-200" data-tab="settings">Settings</button>
+  <div class="max-w-6xl mx-auto px-4 flex gap-1 border-t border-slate-800 overflow-x-auto">
+    <button class="tab-btn tab-active px-4 py-2.5 text-sm font-semibold whitespace-nowrap" data-tab="book">Book a Slot</button>
+    <button class="tab-btn px-4 py-2.5 text-sm font-semibold text-slate-400 hover:text-slate-200 whitespace-nowrap" data-tab="dashboard">Yard Dashboard</button>
+    <button class="tab-btn px-4 py-2.5 text-sm font-semibold text-slate-400 hover:text-slate-200 whitespace-nowrap" data-tab="admin">🔒 Admin</button>
+    <button class="tab-btn px-4 py-2.5 text-sm font-semibold text-slate-400 hover:text-slate-200 whitespace-nowrap" data-tab="settings">Settings</button>
   </div>
 </header>
 
 <main class="max-w-6xl mx-auto px-4 py-6">
 
+  <!-- ─── BOOK TAB ─── -->
   <section id="bookTab" class="tab-content">
     <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
       <div>
@@ -101,6 +106,7 @@
     <div id="slotGrid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"></div>
   </section>
 
+  <!-- ─── DASHBOARD TAB ─── -->
   <section id="dashboardTab" class="tab-content hidden">
     <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
       <div>
@@ -141,6 +147,70 @@
     </div>
   </section>
 
+  <!-- ─── ADMIN TAB (PIN-gated) ─── -->
+  <section id="adminTab" class="tab-content hidden">
+    <!-- PIN GATE -->
+    <div id="adminGate" class="max-w-sm mx-auto mt-10">
+      <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700 text-center">
+        <div class="text-4xl mb-3">🔒</div>
+        <h2 class="text-xl font-bold mb-1">Admin Access</h2>
+        <p class="text-sm text-slate-400 mb-4">Enter PIN to manage materials and carriers.</p>
+        <input type="password" id="pinInput" maxlength="4" inputmode="numeric"
+               class="w-full px-4 py-3 rounded-lg bg-slate-900 border border-slate-700 text-center text-2xl font-mono tracking-widest"
+               placeholder="••••">
+        <button id="pinSubmit" class="w-full mt-3 py-2.5 rounded-lg bg-ob-600 hover:bg-ob-700 font-semibold text-white">Unlock</button>
+        <div id="pinError" class="hidden mt-2 text-xs text-red-400">Incorrect PIN</div>
+      </div>
+    </div>
+
+    <!-- ADMIN CONTENT -->
+    <div id="adminContent" class="hidden">
+      <div class="flex items-center justify-between mb-5 flex-wrap gap-3">
+        <div>
+          <h2 class="text-2xl font-bold">Admin</h2>
+          <p class="text-sm text-slate-400">Manage materials and carriers.</p>
+        </div>
+        <button id="adminLock" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">🔒 Lock</button>
+      </div>
+
+      <!-- Sub-tabs -->
+      <div class="flex gap-1 border-b border-slate-800 mb-5">
+        <button class="admin-subtab px-4 py-2 text-sm font-semibold border-b-2 border-ob-500 text-slate-100" data-subtab="materials">Materials</button>
+        <button class="admin-subtab px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200" data-subtab="carriers">Carriers</button>
+      </div>
+
+      <!-- MATERIALS -->
+      <div id="adminMaterials" class="admin-subpanel">
+        <div class="bg-slate-800 rounded-lg p-4 border border-slate-700 mb-4">
+          <h3 class="text-sm font-bold mb-3 text-slate-300">Add Material</h3>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <input id="newMatName" type="text" placeholder="Material name" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm">
+            <select id="newMatDir" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm">
+              <option value="outbound">Outbound (Bales)</option>
+              <option value="inbound">Inbound</option>
+              <option value="both">Both</option>
+            </select>
+            <button id="addMatBtn" class="px-4 py-2 rounded bg-ob-600 hover:bg-ob-700 font-semibold text-sm text-white">+ Add Material</button>
+          </div>
+        </div>
+        <div id="matList" class="space-y-1"></div>
+      </div>
+
+      <!-- CARRIERS -->
+      <div id="adminCarriers" class="admin-subpanel hidden">
+        <div class="bg-slate-800 rounded-lg p-4 border border-slate-700 mb-4">
+          <h3 class="text-sm font-bold mb-3 text-slate-300">Add Carrier</h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <input id="newCarName" type="text" placeholder="Carrier / company name" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm">
+            <button id="addCarBtn" class="px-4 py-2 rounded bg-ob-600 hover:bg-ob-700 font-semibold text-sm text-white">+ Add Carrier</button>
+          </div>
+        </div>
+        <div id="carList" class="space-y-1"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── SETTINGS TAB ─── -->
   <section id="settingsTab" class="tab-content hidden">
     <h2 class="text-2xl font-bold mb-2">Settings</h2>
     <p class="text-sm text-slate-400 mb-4">Database credentials are built in. These fields are only for rotating keys or testing an alternate database.</p>
@@ -164,16 +234,17 @@
       </div>
       <div class="flex gap-2">
         <button id="saveSettings" class="flex-1 py-2.5 rounded-lg bg-ob-600 hover:bg-ob-700 font-semibold text-white">Save</button>
-        <button id="resetSettings" class="px-4 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 font-semibold text-white text-sm">Reset to Default</button>
+        <button id="resetSettings" class="px-4 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 font-semibold text-white text-sm">Reset</button>
       </div>
       <div id="settingsStatus" class="text-xs text-slate-400 text-center"></div>
     </div>
   </section>
 </main>
 
+<!-- ═══════════════════════════ BOOKING MODAL ═══════════════════════════ -->
 <div id="bookModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-end md:items-center justify-center p-0 md:p-4">
   <div class="bg-slate-900 w-full md:max-w-md rounded-t-2xl md:rounded-2xl border-t md:border border-slate-700 max-h-[95vh] overflow-y-auto">
-    <div class="p-5 border-b border-slate-800 flex items-center justify-between sticky top-0 bg-slate-900">
+    <div class="p-5 border-b border-slate-800 flex items-center justify-between sticky top-0 bg-slate-900 z-10">
       <div>
         <h3 class="text-lg font-bold">Book Time Slot</h3>
         <p id="modalSlotTime" class="text-sm text-slate-400 font-mono">—</p>
@@ -199,31 +270,25 @@
       <div>
         <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Material</label>
         <select id="modalMaterial" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700">
-          <option value="">-- Select material --</option>
-          <optgroup label="Outbound (Bales)">
-            <option>OCC (Cardboard)</option>
-            <option>Mixed Paper</option>
-            <option>HDPE (Natural)</option>
-            <option>HDPE (Color)</option>
-            <option>PET</option>
-            <option>Film Plastic</option>
-            <option>Aluminum Cans</option>
-            <option>Steel / Tin</option>
-          </optgroup>
-          <optgroup label="Inbound">
-            <option>Commingled Recycling</option>
-            <option>C&D Debris</option>
-            <option>OCC Loose</option>
-            <option>Plastic Loose</option>
-            <option>Metal Loose</option>
-            <option>Other</option>
-          </optgroup>
+          <option value="">-- Select direction first --</option>
         </select>
       </div>
 
       <div>
         <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Carrier / Company</label>
-        <input id="modalCarrier" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700" placeholder="e.g. Sullivan Trucking">
+        <input id="modalCarrier" type="text" list="carrierList" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700" placeholder="Type or pick a carrier">
+        <datalist id="carrierList"></datalist>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">BOL # (opt)</label>
+          <input id="modalBOL" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm" placeholder="289085">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Release # (opt)</label>
+          <input id="modalRelease" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm" placeholder="52633">
+        </div>
       </div>
 
       <div class="grid grid-cols-2 gap-3">
@@ -249,6 +314,57 @@
   </div>
 </div>
 
+<!-- ═══════════════════════════ COMPLETE MODAL (BOL capture) ═══════════════════════════ -->
+<div id="completeModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-end md:items-center justify-center p-0 md:p-4">
+  <div class="bg-slate-900 w-full md:max-w-md rounded-t-2xl md:rounded-2xl border-t md:border border-slate-700 max-h-[95vh] overflow-y-auto">
+    <div class="p-5 border-b border-slate-800 flex items-center justify-between sticky top-0 bg-slate-900 z-10">
+      <div>
+        <h3 class="text-lg font-bold">Complete Load</h3>
+        <p id="completeModalSummary" class="text-sm text-slate-400">—</p>
+      </div>
+      <button id="closeCompleteModal" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center">✕</button>
+    </div>
+
+    <div class="p-5 space-y-4">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">BOL #</label>
+          <input id="completeBOL" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm" placeholder="289085">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Release #</label>
+          <input id="completeRelease" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm" placeholder="52633">
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">BOL Photo</label>
+        <div class="flex gap-2">
+          <input type="file" id="bolPhotoInput" accept="image/*" capture="environment" class="hidden">
+          <button id="bolPhotoBtn" class="flex-1 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 border-dashed text-sm font-semibold">
+            📷 Take Photo / Upload
+          </button>
+        </div>
+        <div id="bolPhotoPreview" class="hidden mt-3">
+          <img id="bolPhotoPreviewImg" class="w-full rounded-lg border border-slate-700" alt="BOL preview">
+          <button id="removeBolPhoto" class="mt-2 text-xs text-red-400 hover:text-red-300">Remove photo</button>
+        </div>
+        <div id="bolUploadProgress" class="hidden mt-2 text-xs text-slate-400">Uploading…</div>
+      </div>
+
+      <button id="confirmComplete" class="w-full py-3 rounded-lg bg-ob-600 hover:bg-ob-700 font-bold text-white disabled:opacity-50">
+        Mark Complete
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ PHOTO VIEWER MODAL ═══════════════════════════ -->
+<div id="photoViewer" class="hidden fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4" onclick="this.classList.add('hidden')">
+  <img id="photoViewerImg" class="max-w-full max-h-full rounded-lg" alt="BOL">
+</div>
+
+<!-- ═══════════════════════════ TOAST ═══════════════════════════ -->
 <div id="toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-lg shadow-2xl font-semibold text-sm toast-in"></div>
 
 
@@ -256,15 +372,14 @@
 'use strict';
 
 /* ═══════════════════════════════════════════════════════════════════
-   BAKED-IN SUPABASE CREDENTIALS
-   Project: dalmex-scheduler (isolated from DivertScan)
-   The anon key is safe to expose publicly — it's protected server-side
-   by Row Level Security policies defined in dalmex_schedule_schema.sql
+   BAKED-IN CONFIG
    ═══════════════════════════════════════════════════════════════════ */
 const DEFAULT_SUPABASE_URL = 'https://csadynnlzbtxrqsiyxjy.supabase.co';
 const DEFAULT_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNzYWR5bm5semJ0eHJxc2l5eGp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0Njk2NjYsImV4cCI6MjA5MjA0NTY2Nn0.HvqgeMvU3QEaH5UlQcbwLUDd6Q4SjSerz9UMSYWZ6co';
 const DEFAULT_START_HOUR = 7;
 const DEFAULT_END_HOUR   = 17;
+const ADMIN_PIN = '2828';            // Change here to rotate admin PIN
+const BOL_BUCKET = 'bol-photos';     // Supabase Storage bucket for BOL images
 
 const App = {
     state: {
@@ -274,15 +389,23 @@ const App = {
         endHour:      DEFAULT_END_HOUR,
         activeDate:   new Date().toISOString().slice(0,10),
         activeTab:    'book',
+        adminUnlocked: false,
+        adminSubtab: 'materials',
         selectedSlot: null,
         selectedDir:  null,
         schedule:     [],
+        materials:    [],
+        carriers:     [],
+        completingBooking: null,
+        pendingBolPhoto: null,   // { file, previewUrl }
     },
 
     init() {
         this.loadConfig();
         this.bindEvents();
         document.getElementById('bookDate').value = this.state.activeDate;
+        this.loadMaterials();
+        this.loadCarriers();
         this.loadSchedule();
         setInterval(() => {
             if (this.state.activeTab === 'dashboard') this.loadSchedule();
@@ -317,10 +440,8 @@ const App = {
 
         if (urlInput) localStorage.setItem('dalmex_sb_url', urlInput);
         else localStorage.removeItem('dalmex_sb_url');
-
         if (keyInput) localStorage.setItem('dalmex_sb_key', keyInput);
         else localStorage.removeItem('dalmex_sb_key');
-
         localStorage.setItem('dalmex_start_hr', sh);
         localStorage.setItem('dalmex_end_hr', eh);
 
@@ -336,10 +457,7 @@ const App = {
     },
 
     resetConfig() {
-        localStorage.removeItem('dalmex_sb_url');
-        localStorage.removeItem('dalmex_sb_key');
-        localStorage.removeItem('dalmex_start_hr');
-        localStorage.removeItem('dalmex_end_hr');
+        ['dalmex_sb_url','dalmex_sb_key','dalmex_start_hr','dalmex_end_hr'].forEach(k => localStorage.removeItem(k));
         this.loadConfig();
         document.getElementById('settingsStatus').textContent = '✓ Reset to defaults';
         this.toast('Reset to defaults', 'success');
@@ -355,6 +473,7 @@ const App = {
         }
     },
 
+    // ─── SUPABASE REST ────────────────────────────────────────────
     async supabase(endpoint, method = 'GET', body = null) {
         if (!this.state.supabaseUrl || !this.state.supabaseKey) {
             this.toast('Database not configured', 'error');
@@ -367,7 +486,6 @@ const App = {
             'Content-Type': 'application/json',
         };
         if (method === 'POST' || method === 'PATCH') headers['Prefer'] = 'return=representation';
-
         const opts = { method, headers };
         if (body) opts.body = JSON.stringify(body);
 
@@ -389,10 +507,57 @@ const App = {
         }
     },
 
+    // ─── SUPABASE STORAGE ─────────────────────────────────────────
+    async uploadBolPhoto(file, bookingId) {
+        const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+        const path = `bookings/${bookingId}-${Date.now()}.${ext}`;
+        const url = `${this.state.supabaseUrl}/storage/v1/object/${BOL_BUCKET}/${path}`;
+
+        try {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'apikey': this.state.supabaseKey,
+                    'Authorization': `Bearer ${this.state.supabaseKey}`,
+                    'Content-Type': file.type || 'image/jpeg',
+                    'x-upsert': 'true',
+                },
+                body: file,
+            });
+            if (!res.ok) {
+                const err = await res.text();
+                console.error('[Storage upload]', res.status, err);
+                this.toast('Photo upload failed', 'error');
+                return null;
+            }
+            const publicUrl = `${this.state.supabaseUrl}/storage/v1/object/public/${BOL_BUCKET}/${path}`;
+            return { path, publicUrl };
+        } catch (e) {
+            console.error('[Storage upload]', e);
+            this.toast('Upload network error', 'error');
+            return null;
+        }
+    },
+
     async generateBookingHash(payload) {
         const enc = new TextEncoder().encode(JSON.stringify(payload) + Date.now());
         const buf = await crypto.subtle.digest('SHA-256', enc);
         return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    },
+
+    // ─── DATA LOADERS ────────────────────────────────────────────
+    async loadMaterials() {
+        const rows = await this.supabase('materials?order=sort_order.asc,name.asc');
+        this.state.materials = rows || [];
+        this.renderMaterialDropdown();
+        if (this.state.activeTab === 'admin' && this.state.adminSubtab === 'materials') this.renderMaterialsAdmin();
+    },
+
+    async loadCarriers() {
+        const rows = await this.supabase('carriers?order=sort_order.asc,name.asc');
+        this.state.carriers = rows || [];
+        this.renderCarrierDatalist();
+        if (this.state.activeTab === 'admin' && this.state.adminSubtab === 'carriers') this.renderCarriersAdmin();
     },
 
     async loadSchedule() {
@@ -408,6 +573,7 @@ const App = {
         if (this.state.activeTab === 'dashboard') this.renderDashboard();
     },
 
+    // ─── RENDER: BOOK GRID ───────────────────────────────────────
     renderSlotGrid() {
         const grid = document.getElementById('slotGrid');
         const date = this.state.activeDate;
@@ -426,8 +592,7 @@ const App = {
 
             if (!booking) {
                 return `
-                <button class="slot-btn p-4 rounded-xl bg-slate-800 border border-slate-700 hover:border-ob-500 text-left"
-                        data-slot="${s.iso}">
+                <button class="slot-btn p-4 rounded-xl bg-slate-800 border border-slate-700 hover:border-ob-500 text-left" data-slot="${s.iso}">
                     <div class="text-sm font-mono text-slate-400">${hourLabel} – ${hourEnd}</div>
                     <div class="text-sm font-semibold text-slate-300 mt-1">Available</div>
                     <div class="text-xs text-slate-500 mt-0.5">Tap to book</div>
@@ -461,6 +626,7 @@ const App = {
         });
     },
 
+    // ─── BOOK MODAL ──────────────────────────────────────────────
     openBookModal(slotISO) {
         this.state.selectedSlot = slotISO;
         this.state.selectedDir = null;
@@ -469,8 +635,10 @@ const App = {
         document.getElementById('modalSlotTime').textContent =
             `${d.toLocaleDateString()} · ${this.formatHour(d.getHours())} – ${this.formatHour(endD.getHours())}`;
         document.querySelectorAll('.dir-btn').forEach(b => b.classList.remove('border-ob-500', 'border-ib-500', 'bg-ob-900/30', 'bg-ib-900/30'));
-        document.getElementById('modalMaterial').value = '';
+        document.getElementById('modalMaterial').innerHTML = '<option value="">-- Select direction first --</option>';
         document.getElementById('modalCarrier').value = '';
+        document.getElementById('modalBOL').value = '';
+        document.getElementById('modalRelease').value = '';
         document.getElementById('modalPO').value = '';
         document.getElementById('modalTruck').value = '';
         document.getElementById('modalNotes').value = '';
@@ -497,7 +665,28 @@ const App = {
         btn.classList.remove('bg-ob-600', 'hover:bg-ob-700', 'bg-ib-600', 'hover:bg-ib-700');
         if (dir === 'outbound') btn.classList.add('bg-ob-600', 'hover:bg-ob-700');
         else btn.classList.add('bg-ib-600', 'hover:bg-ib-700');
+        this.renderMaterialDropdown();
         this.updateConfirmBtn();
+    },
+
+    renderMaterialDropdown() {
+        const sel = document.getElementById('modalMaterial');
+        if (!this.state.selectedDir) {
+            sel.innerHTML = '<option value="">-- Select direction first --</option>';
+            return;
+        }
+        const items = this.state.materials.filter(m =>
+            m.active && (m.direction === this.state.selectedDir || m.direction === 'both')
+        );
+        sel.innerHTML = '<option value="">-- Select material --</option>' +
+            items.map(m => `<option value="${this.esc(m.name)}">${this.esc(m.name)}</option>`).join('');
+    },
+
+    renderCarrierDatalist() {
+        const dl = document.getElementById('carrierList');
+        dl.innerHTML = this.state.carriers
+            .filter(c => c.active)
+            .map(c => `<option value="${this.esc(c.name)}">`).join('');
     },
 
     updateConfirmBtn() {
@@ -512,14 +701,16 @@ const App = {
         btn.textContent = 'Booking…';
 
         const payload = {
-            time:        this.state.selectedSlot,
-            direction:   this.state.selectedDir,
-            material:    document.getElementById('modalMaterial').value.trim(),
-            carrier:     document.getElementById('modalCarrier').value.trim(),
-            po_number:   document.getElementById('modalPO').value.trim() || null,
-            truck_id:    document.getElementById('modalTruck').value.trim() || null,
-            notes:       document.getElementById('modalNotes').value.trim() || null,
-            status:      'booked',
+            time:           this.state.selectedSlot,
+            direction:      this.state.selectedDir,
+            material:       document.getElementById('modalMaterial').value.trim(),
+            carrier:        document.getElementById('modalCarrier').value.trim(),
+            bol_number:     document.getElementById('modalBOL').value.trim() || null,
+            release_number: document.getElementById('modalRelease').value.trim() || null,
+            po_number:      document.getElementById('modalPO').value.trim() || null,
+            truck_id:       document.getElementById('modalTruck').value.trim() || null,
+            notes:          document.getElementById('modalNotes').value.trim() || null,
+            status:         'booked',
         };
         payload.booking_hash = await this.generateBookingHash(payload);
 
@@ -528,6 +719,12 @@ const App = {
         btn.textContent = 'Confirm Booking';
 
         if (res && res.length) {
+            // Auto-add carrier to list if new
+            const carName = payload.carrier;
+            if (carName && !this.state.carriers.find(c => c.name.toLowerCase() === carName.toLowerCase())) {
+                await this.supabase('carriers', 'POST', { name: carName, sort_order: 500 });
+                this.loadCarriers();
+            }
             this.toast('✓ Booking confirmed', 'success');
             this.closeBookModal();
             await this.loadSchedule();
@@ -537,6 +734,7 @@ const App = {
         }
     },
 
+    // ─── DASHBOARD ───────────────────────────────────────────────
     renderDashboard() {
         const today = this.state.activeDate;
         const rows = this.state.schedule
@@ -557,12 +755,7 @@ const App = {
 
         const list = document.getElementById('dashList');
         const empty = document.getElementById('dashEmpty');
-
-        if (!rows.length) {
-            list.innerHTML = '';
-            empty.classList.remove('hidden');
-            return;
-        }
+        if (!rows.length) { list.innerHTML=''; empty.classList.remove('hidden'); return; }
         empty.classList.add('hidden');
 
         list.innerHTML = rows.map(r => {
@@ -583,16 +776,29 @@ const App = {
             } else if (r.status === 'arrived') {
                 statusBadge = '<span class="px-2 py-0.5 rounded-full bg-amber-600 text-white text-xs font-bold pulse-dot">ON SITE</span>';
                 actionBtns = `
-                    <button class="act-btn px-3 py-2 rounded-lg bg-ob-600 hover:bg-ob-700 text-white text-xs font-bold" data-id="${r.id}" data-action="completed">Mark Complete</button>
+                    <button class="act-btn px-3 py-2 rounded-lg bg-ob-600 hover:bg-ob-700 text-white text-xs font-bold" data-id="${r.id}" data-action="complete">Mark Complete</button>
                     <button class="act-btn px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold" data-id="${r.id}" data-action="booked">Undo</button>
                 `;
             } else if (r.status === 'completed') {
                 statusBadge = '<span class="px-2 py-0.5 rounded-full bg-ob-700 text-white text-xs font-bold">COMPLETED</span>';
-                actionBtns = `<button class="act-btn px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold" data-id="${r.id}" data-action="arrived">Reopen</button>`;
+                actionBtns = `<button class="act-btn px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold" data-id="${r.id}" data-action="complete">Edit BOL</button>
+                              <button class="act-btn px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold" data-id="${r.id}" data-action="arrived">Reopen</button>`;
             } else {
                 statusBadge = `<span class="px-2 py-0.5 rounded-full bg-red-900/50 text-red-300 text-xs font-semibold">${r.status.toUpperCase()}</span>`;
                 actionBtns = `<button class="act-btn px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold" data-id="${r.id}" data-action="booked">Restore</button>`;
             }
+
+            // Build BOL meta line
+            const bolBits = [];
+            if (r.bol_number) bolBits.push(`BOL ${this.esc(r.bol_number)}`);
+            if (r.release_number) bolBits.push(`Rel ${this.esc(r.release_number)}`);
+            if (r.po_number) bolBits.push(`PO ${this.esc(r.po_number)}`);
+            if (r.truck_id) bolBits.push(`Truck ${this.esc(r.truck_id)}`);
+            const bolLine = bolBits.length ? `<div class="text-xs text-slate-500 mt-1 font-mono">${bolBits.join(' · ')}</div>` : '';
+
+            const photoThumb = r.bol_photo_url
+                ? `<img src="${this.esc(r.bol_photo_url)}" class="bol-thumb w-14 h-14 rounded-lg border border-slate-600 object-cover cursor-pointer" data-photo="${this.esc(r.bol_photo_url)}" alt="BOL">`
+                : '';
 
             return `
             <div class="bg-slate-800 rounded-lg p-4 border border-slate-700 flex items-center gap-4 flex-wrap">
@@ -607,15 +813,32 @@ const App = {
                         ${statusBadge}
                     </div>
                     <div class="font-semibold mt-1">${this.esc(r.carrier)}</div>
-                    <div class="text-sm text-slate-400">${this.esc(r.material)}${r.truck_id ? ' · Truck ' + this.esc(r.truck_id) : ''}${r.po_number ? ' · PO ' + this.esc(r.po_number) : ''}</div>
+                    <div class="text-sm text-slate-400">${this.esc(r.material)}</div>
+                    ${bolLine}
                     ${r.notes ? `<div class="text-xs text-slate-500 mt-1 italic">"${this.esc(r.notes)}"</div>` : ''}
                 </div>
+                ${photoThumb}
                 <div class="flex gap-2 flex-wrap">${actionBtns}</div>
             </div>`;
         }).join('');
 
         list.querySelectorAll('.act-btn').forEach(b => {
-            b.addEventListener('click', () => this.updateStatus(b.dataset.id, b.dataset.action));
+            b.addEventListener('click', () => {
+                const id = b.dataset.id;
+                const action = b.dataset.action;
+                if (action === 'complete') {
+                    this.openCompleteModal(id);
+                } else {
+                    this.updateStatus(id, action);
+                }
+            });
+        });
+        list.querySelectorAll('[data-photo]').forEach(img => {
+            img.addEventListener('click', e => {
+                e.stopPropagation();
+                document.getElementById('photoViewerImg').src = img.dataset.photo;
+                document.getElementById('photoViewer').classList.remove('hidden');
+            });
         });
 
         document.getElementById('lastRefresh').textContent = 'Updated ' + new Date().toLocaleTimeString();
@@ -624,9 +847,7 @@ const App = {
     async updateStatus(id, newStatus) {
         const patch = { status: newStatus };
         if (newStatus === 'arrived')   patch.arrived_at = new Date().toISOString();
-        if (newStatus === 'completed') patch.completed_at = new Date().toISOString();
         if (newStatus === 'booked')    { patch.arrived_at = null; patch.completed_at = null; }
-
         const res = await this.supabase(`schedule?id=eq.${id}`, 'PATCH', patch);
         if (res) {
             this.toast(`Status → ${newStatus.toUpperCase()}`, 'success');
@@ -634,6 +855,258 @@ const App = {
         }
     },
 
+    // ─── COMPLETE MODAL (BOL capture) ────────────────────────────
+    openCompleteModal(bookingId) {
+        const booking = this.state.schedule.find(r => String(r.id) === String(bookingId));
+        if (!booking) return;
+        this.state.completingBooking = booking;
+        this.state.pendingBolPhoto = null;
+
+        document.getElementById('completeModalSummary').textContent =
+            `${booking.carrier} · ${booking.material}`;
+        document.getElementById('completeBOL').value = booking.bol_number || '';
+        document.getElementById('completeRelease').value = booking.release_number || '';
+
+        const preview = document.getElementById('bolPhotoPreview');
+        if (booking.bol_photo_url) {
+            document.getElementById('bolPhotoPreviewImg').src = booking.bol_photo_url;
+            preview.classList.remove('hidden');
+        } else {
+            preview.classList.add('hidden');
+        }
+        document.getElementById('bolUploadProgress').classList.add('hidden');
+        document.getElementById('completeModal').classList.remove('hidden');
+    },
+
+    closeCompleteModal() {
+        document.getElementById('completeModal').classList.add('hidden');
+        this.state.completingBooking = null;
+        this.state.pendingBolPhoto = null;
+    },
+
+    handleBolPhotoSelect(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const previewUrl = URL.createObjectURL(file);
+        document.getElementById('bolPhotoPreviewImg').src = previewUrl;
+        document.getElementById('bolPhotoPreview').classList.remove('hidden');
+        this.state.pendingBolPhoto = { file, previewUrl };
+    },
+
+    removeBolPhoto() {
+        this.state.pendingBolPhoto = null;
+        document.getElementById('bolPhotoInput').value = '';
+        document.getElementById('bolPhotoPreview').classList.add('hidden');
+        if (this.state.completingBooking) {
+            this.state.completingBooking.bol_photo_url = null;
+            this.state.completingBooking.bol_photo_path = null;
+        }
+    },
+
+    async confirmComplete() {
+        const booking = this.state.completingBooking;
+        if (!booking) return;
+
+        const btn = document.getElementById('confirmComplete');
+        btn.disabled = true;
+        btn.textContent = 'Saving…';
+
+        const patch = {
+            status:         'completed',
+            completed_at:   new Date().toISOString(),
+            bol_number:     document.getElementById('completeBOL').value.trim() || null,
+            release_number: document.getElementById('completeRelease').value.trim() || null,
+        };
+
+        // Handle photo
+        if (this.state.pendingBolPhoto) {
+            document.getElementById('bolUploadProgress').classList.remove('hidden');
+            const up = await this.uploadBolPhoto(this.state.pendingBolPhoto.file, booking.id);
+            document.getElementById('bolUploadProgress').classList.add('hidden');
+            if (up) {
+                patch.bol_photo_url = up.publicUrl;
+                patch.bol_photo_path = up.path;
+            }
+        } else if (booking.bol_photo_url === null || booking.bol_photo_url === undefined) {
+            // Photo was removed in UI
+            patch.bol_photo_url = null;
+            patch.bol_photo_path = null;
+        }
+
+        const res = await this.supabase(`schedule?id=eq.${booking.id}`, 'PATCH', patch);
+        btn.disabled = false;
+        btn.textContent = 'Mark Complete';
+
+        if (res) {
+            this.toast('✓ Load completed', 'success');
+            this.closeCompleteModal();
+            await this.loadSchedule();
+        }
+    },
+
+    // ─── ADMIN: PIN GATE ─────────────────────────────────────────
+    trySubmitPin() {
+        const val = document.getElementById('pinInput').value.trim();
+        if (val === ADMIN_PIN) {
+            this.state.adminUnlocked = true;
+            document.getElementById('adminGate').classList.add('hidden');
+            document.getElementById('adminContent').classList.remove('hidden');
+            document.getElementById('pinError').classList.add('hidden');
+            document.getElementById('pinInput').value = '';
+            this.switchAdminSubtab(this.state.adminSubtab);
+        } else {
+            document.getElementById('pinError').classList.remove('hidden');
+            document.getElementById('pinInput').value = '';
+        }
+    },
+
+    lockAdmin() {
+        this.state.adminUnlocked = false;
+        document.getElementById('adminGate').classList.remove('hidden');
+        document.getElementById('adminContent').classList.add('hidden');
+    },
+
+    switchAdminSubtab(sub) {
+        this.state.adminSubtab = sub;
+        document.querySelectorAll('.admin-subtab').forEach(b => {
+            b.classList.remove('border-ob-500', 'text-slate-100');
+            b.classList.add('border-transparent', 'text-slate-400');
+            if (b.dataset.subtab === sub) {
+                b.classList.add('border-ob-500', 'text-slate-100');
+                b.classList.remove('border-transparent', 'text-slate-400');
+            }
+        });
+        document.querySelectorAll('.admin-subpanel').forEach(p => p.classList.add('hidden'));
+        if (sub === 'materials') { document.getElementById('adminMaterials').classList.remove('hidden'); this.renderMaterialsAdmin(); }
+        if (sub === 'carriers')  { document.getElementById('adminCarriers').classList.remove('hidden');  this.renderCarriersAdmin(); }
+    },
+
+    // ─── ADMIN: MATERIALS ────────────────────────────────────────
+    renderMaterialsAdmin() {
+        const list = document.getElementById('matList');
+        if (!this.state.materials.length) {
+            list.innerHTML = '<div class="text-center py-8 text-slate-500 text-sm">No materials yet. Add one above.</div>';
+            return;
+        }
+        const groups = {
+            outbound: this.state.materials.filter(m => m.direction === 'outbound'),
+            inbound:  this.state.materials.filter(m => m.direction === 'inbound'),
+            both:     this.state.materials.filter(m => m.direction === 'both'),
+        };
+        list.innerHTML = ['outbound','inbound','both'].filter(k => groups[k].length).map(k => {
+            const label = k === 'outbound' ? 'OUTBOUND (Bales)' : k === 'inbound' ? 'INBOUND' : 'BOTH DIRECTIONS';
+            const color = k === 'outbound' ? 'text-ob-500' : k === 'inbound' ? 'text-ib-500' : 'text-slate-400';
+            return `
+            <div class="mt-3 mb-1 text-xs font-bold uppercase tracking-wide ${color}">${label}</div>
+            ${groups[k].map(m => `
+                <div class="bg-slate-800 rounded-lg p-3 border border-slate-700 flex items-center gap-3 ${m.active ? '' : 'inactive-row'}" data-id="${m.id}">
+                    <div class="flex-1 font-semibold">${this.esc(m.name)}</div>
+                    <button class="mat-toggle px-2 py-1 rounded text-xs font-semibold ${m.active ? 'bg-ob-900/50 text-ob-500' : 'bg-slate-700 text-slate-400'}" data-id="${m.id}" data-active="${m.active}">
+                        ${m.active ? 'Active' : 'Inactive'}
+                    </button>
+                    <button class="mat-edit px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-xs" data-id="${m.id}">Edit</button>
+                    <button class="mat-delete px-2 py-1 rounded bg-red-900/50 hover:bg-red-900 text-red-300 text-xs" data-id="${m.id}">Delete</button>
+                </div>
+            `).join('')}
+            `;
+        }).join('');
+
+        list.querySelectorAll('.mat-toggle').forEach(b => b.addEventListener('click', () => this.toggleMaterial(b.dataset.id, b.dataset.active === 'true')));
+        list.querySelectorAll('.mat-edit').forEach(b => b.addEventListener('click', () => this.editMaterial(b.dataset.id)));
+        list.querySelectorAll('.mat-delete').forEach(b => b.addEventListener('click', () => this.deleteMaterial(b.dataset.id)));
+    },
+
+    async addMaterial() {
+        const name = document.getElementById('newMatName').value.trim();
+        const dir = document.getElementById('newMatDir').value;
+        if (!name) { this.toast('Name required', 'error'); return; }
+        const res = await this.supabase('materials', 'POST', { name, direction: dir, sort_order: 500 });
+        if (res) {
+            document.getElementById('newMatName').value = '';
+            this.toast('✓ Material added', 'success');
+            await this.loadMaterials();
+        }
+    },
+
+    async toggleMaterial(id, currentlyActive) {
+        const res = await this.supabase(`materials?id=eq.${id}`, 'PATCH', { active: !currentlyActive });
+        if (res) await this.loadMaterials();
+    },
+
+    async editMaterial(id) {
+        const mat = this.state.materials.find(m => String(m.id) === String(id));
+        if (!mat) return;
+        const newName = prompt('Rename material:', mat.name);
+        if (newName === null || newName.trim() === '' || newName.trim() === mat.name) return;
+        const res = await this.supabase(`materials?id=eq.${id}`, 'PATCH', { name: newName.trim() });
+        if (res) { this.toast('✓ Renamed', 'success'); await this.loadMaterials(); }
+    },
+
+    async deleteMaterial(id) {
+        const mat = this.state.materials.find(m => String(m.id) === String(id));
+        if (!mat) return;
+        if (!confirm(`Delete "${mat.name}"? This cannot be undone.\n\n(Past bookings using this material will keep their record.)`)) return;
+        const res = await this.supabase(`materials?id=eq.${id}`, 'DELETE');
+        if (res !== null) { this.toast('✓ Deleted', 'success'); await this.loadMaterials(); }
+    },
+
+    // ─── ADMIN: CARRIERS ─────────────────────────────────────────
+    renderCarriersAdmin() {
+        const list = document.getElementById('carList');
+        if (!this.state.carriers.length) {
+            list.innerHTML = '<div class="text-center py-8 text-slate-500 text-sm">No carriers yet. Add one above.</div>';
+            return;
+        }
+        list.innerHTML = this.state.carriers.map(c => `
+            <div class="bg-slate-800 rounded-lg p-3 border border-slate-700 flex items-center gap-3 ${c.active ? '' : 'inactive-row'}" data-id="${c.id}">
+                <div class="flex-1 font-semibold">${this.esc(c.name)}</div>
+                <button class="car-toggle px-2 py-1 rounded text-xs font-semibold ${c.active ? 'bg-ob-900/50 text-ob-500' : 'bg-slate-700 text-slate-400'}" data-id="${c.id}" data-active="${c.active}">
+                    ${c.active ? 'Active' : 'Inactive'}
+                </button>
+                <button class="car-edit px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-xs" data-id="${c.id}">Edit</button>
+                <button class="car-delete px-2 py-1 rounded bg-red-900/50 hover:bg-red-900 text-red-300 text-xs" data-id="${c.id}">Delete</button>
+            </div>
+        `).join('');
+
+        list.querySelectorAll('.car-toggle').forEach(b => b.addEventListener('click', () => this.toggleCarrier(b.dataset.id, b.dataset.active === 'true')));
+        list.querySelectorAll('.car-edit').forEach(b => b.addEventListener('click', () => this.editCarrier(b.dataset.id)));
+        list.querySelectorAll('.car-delete').forEach(b => b.addEventListener('click', () => this.deleteCarrier(b.dataset.id)));
+    },
+
+    async addCarrier() {
+        const name = document.getElementById('newCarName').value.trim();
+        if (!name) { this.toast('Name required', 'error'); return; }
+        const res = await this.supabase('carriers', 'POST', { name, sort_order: 500 });
+        if (res) {
+            document.getElementById('newCarName').value = '';
+            this.toast('✓ Carrier added', 'success');
+            await this.loadCarriers();
+        }
+    },
+
+    async toggleCarrier(id, currentlyActive) {
+        const res = await this.supabase(`carriers?id=eq.${id}`, 'PATCH', { active: !currentlyActive });
+        if (res) await this.loadCarriers();
+    },
+
+    async editCarrier(id) {
+        const car = this.state.carriers.find(c => String(c.id) === String(id));
+        if (!car) return;
+        const newName = prompt('Rename carrier:', car.name);
+        if (newName === null || newName.trim() === '' || newName.trim() === car.name) return;
+        const res = await this.supabase(`carriers?id=eq.${id}`, 'PATCH', { name: newName.trim() });
+        if (res) { this.toast('✓ Renamed', 'success'); await this.loadCarriers(); }
+    },
+
+    async deleteCarrier(id) {
+        const car = this.state.carriers.find(c => String(c.id) === String(id));
+        if (!car) return;
+        if (!confirm(`Delete "${car.name}"? This cannot be undone.\n\n(Past bookings using this carrier will keep their record.)`)) return;
+        const res = await this.supabase(`carriers?id=eq.${id}`, 'DELETE');
+        if (res !== null) { this.toast('✓ Deleted', 'success'); await this.loadCarriers(); }
+    },
+
+    // ─── TAB / NAV ───────────────────────────────────────────────
     switchTab(tab) {
         this.state.activeTab = tab;
         document.querySelectorAll('.tab-btn').forEach(b => {
@@ -646,14 +1119,27 @@ const App = {
         });
         document.querySelectorAll('.tab-content').forEach(s => s.classList.add('hidden'));
         document.getElementById(tab + 'Tab').classList.remove('hidden');
+
         if (tab === 'book') this.renderSlotGrid();
         if (tab === 'dashboard') this.loadSchedule();
+        if (tab === 'admin') {
+            if (this.state.adminUnlocked) {
+                document.getElementById('adminGate').classList.add('hidden');
+                document.getElementById('adminContent').classList.remove('hidden');
+                this.switchAdminSubtab(this.state.adminSubtab);
+            } else {
+                document.getElementById('adminGate').classList.remove('hidden');
+                document.getElementById('adminContent').classList.add('hidden');
+                setTimeout(() => document.getElementById('pinInput').focus(), 100);
+            }
+        }
     },
 
     bindEvents() {
         document.querySelectorAll('.tab-btn').forEach(b =>
             b.addEventListener('click', () => this.switchTab(b.dataset.tab)));
 
+        // Book tab
         document.getElementById('bookDate').addEventListener('change', e => {
             this.state.activeDate = e.target.value;
             this.loadSchedule();
@@ -661,6 +1147,7 @@ const App = {
         document.getElementById('prevDay').addEventListener('click', () => this.shiftDay(-1));
         document.getElementById('nextDay').addEventListener('click', () => this.shiftDay(1));
 
+        // Book modal
         document.getElementById('closeModal').addEventListener('click', () => this.closeBookModal());
         document.getElementById('bookModal').addEventListener('click', e => {
             if (e.target.id === 'bookModal') this.closeBookModal();
@@ -671,7 +1158,29 @@ const App = {
             document.getElementById(id).addEventListener('input', () => this.updateConfirmBtn()));
         document.getElementById('confirmBook').addEventListener('click', () => this.confirmBooking());
 
+        // Complete modal
+        document.getElementById('closeCompleteModal').addEventListener('click', () => this.closeCompleteModal());
+        document.getElementById('completeModal').addEventListener('click', e => {
+            if (e.target.id === 'completeModal') this.closeCompleteModal();
+        });
+        document.getElementById('bolPhotoBtn').addEventListener('click', () => document.getElementById('bolPhotoInput').click());
+        document.getElementById('bolPhotoInput').addEventListener('change', e => this.handleBolPhotoSelect(e));
+        document.getElementById('removeBolPhoto').addEventListener('click', () => this.removeBolPhoto());
+        document.getElementById('confirmComplete').addEventListener('click', () => this.confirmComplete());
+
+        // Dashboard
         document.getElementById('refreshDash').addEventListener('click', () => this.loadSchedule());
+
+        // Admin
+        document.getElementById('pinSubmit').addEventListener('click', () => this.trySubmitPin());
+        document.getElementById('pinInput').addEventListener('keypress', e => { if (e.key === 'Enter') this.trySubmitPin(); });
+        document.getElementById('adminLock').addEventListener('click', () => this.lockAdmin());
+        document.querySelectorAll('.admin-subtab').forEach(b =>
+            b.addEventListener('click', () => this.switchAdminSubtab(b.dataset.subtab)));
+        document.getElementById('addMatBtn').addEventListener('click', () => this.addMaterial());
+        document.getElementById('addCarBtn').addEventListener('click', () => this.addCarrier());
+
+        // Settings
         document.getElementById('saveSettings').addEventListener('click', () => this.saveConfig());
         document.getElementById('resetSettings').addEventListener('click', () => this.resetConfig());
     },
@@ -684,6 +1193,7 @@ const App = {
         this.loadSchedule();
     },
 
+    // ─── UTILITIES ───────────────────────────────────────────────
     localIsoForHour(dateStr, hour) {
         const d = new Date(`${dateStr}T${String(hour).padStart(2,'0')}:00:00`);
         return d.toISOString();
