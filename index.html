@@ -1,1595 +1,355 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#0f172a">
-<title>Dalmex Scheduler — Dalmex Recycling LLC</title>
-<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect fill='%230f172a' width='100' height='100' rx='20'/%3E%3Ctext x='50' y='65' font-size='50' text-anchor='middle' fill='%2310b981' font-family='sans-serif' font-weight='bold'%3ED%3C/text%3E%3C/svg%3E">
-
-<script src="https://cdn.tailwindcss.com"></script>
-<script>
-  tailwind.config = { theme: { extend: {
-    colors: {
-      ob: { 500:'#10b981', 600:'#059669', 700:'#047857', 900:'#064e3b' },
-      ib: { 500:'#3b82f6', 600:'#2563eb', 700:'#1d4ed8', 900:'#1e3a8a' },
-    },
-    fontFamily: { display: ['"DM Sans"','sans-serif'], mono: ['"JetBrains Mono"','monospace'] }
-  } } }
-</script>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-
-<style>
-  :root { --bg:#0f172a; --panel:#1e293b; --ob:#10b981; --ib:#3b82f6; --warn:#f59e0b; }
-  html, body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: #f1f5f9; }
-  .slot-btn { transition: all 0.15s ease; }
-  .slot-btn:active { transform: scale(0.97); }
-  .slot-booked-ob { background: rgba(16,185,129,0.15); border-color: var(--ob); }
-  .slot-booked-ib { background: rgba(59,130,246,0.15); border-color: var(--ib); }
-  .slot-arrived { background: rgba(245,158,11,0.25); border-color: var(--warn); }
-  .slot-completed { background: rgba(100,116,139,0.2); border-color: #64748b; opacity:0.6; }
-  .tab-active { background: var(--panel); border-bottom: 2px solid var(--ob); }
-  .toast-in { animation: toastIn 0.25s ease-out; }
-  @keyframes toastIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-  .pulse-dot { animation: pulse 1.5s infinite; }
-  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-  ::-webkit-scrollbar { width: 8px; height: 8px; }
-  ::-webkit-scrollbar-track { background: #1e293b; }
-  ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
-  .inactive-row { opacity: 0.5; }
-  .bol-thumb:active, .copyable:active { transform: scale(0.95); }
-  .copyable { cursor: pointer; transition: color 0.15s; }
-  .copyable:hover { color: #10b981 !important; }
-  .score-bar { transition: width 0.6s ease; }
-  .pdf-card { background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 100%); }
-</style>
-</head>
-
-<body class="min-h-screen">
-
-<header class="border-b border-slate-700 bg-slate-900 sticky top-0 z-40">
-  <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-    <div class="flex items-center gap-3">
-      <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-ob-500 to-ob-700 flex items-center justify-center font-extrabold text-white text-lg">D</div>
-      <div>
-        <h1 class="text-lg font-extrabold tracking-tight">Dalmex Scheduler</h1>
-        <p class="text-xs text-slate-400 -mt-0.5">Dalmex Recycling LLC · Load Booking</p>
-      </div>
-    </div>
-    <div id="connStatus" class="flex items-center gap-1.5 text-xs text-slate-400">
-      <span class="w-2 h-2 rounded-full bg-slate-500"></span><span>—</span>
-    </div>
-  </div>
-  <div class="max-w-6xl mx-auto px-4 flex gap-1 border-t border-slate-800 overflow-x-auto">
-    <button class="tab-btn tab-active px-4 py-2.5 text-sm font-semibold whitespace-nowrap" data-tab="book">Book a Slot</button>
-    <button class="tab-btn px-4 py-2.5 text-sm font-semibold text-slate-400 whitespace-nowrap" data-tab="dashboard">Yard Dashboard</button>
-    <button class="tab-btn px-4 py-2.5 text-sm font-semibold text-slate-400 whitespace-nowrap" data-tab="admin">🔒 Admin</button>
-    <button class="tab-btn px-4 py-2.5 text-sm font-semibold text-slate-400 whitespace-nowrap" data-tab="settings">Settings</button>
-  </div>
-</header>
-
-<main class="max-w-6xl mx-auto px-4 py-6">
-
-  <section id="bookTab" class="tab-content">
-    <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
-      <div>
-        <h2 class="text-2xl font-bold">Schedule a Truck</h2>
-        <p class="text-sm text-slate-400">Select a date, then tap a 1-hour slot to book.</p>
-      </div>
-      <div class="flex gap-2">
-        <button id="prevDay" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">◀</button>
-        <button id="todayBtn" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">Today</button>
-        <input type="date" id="bookDate" class="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm">
-        <button id="nextDay" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">▶</button>
-      </div>
-    </div>
-    <div class="flex gap-4 mb-4 text-xs flex-wrap">
-      <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-slate-700 border border-slate-600"></span><span class="text-slate-400">Available</span></div>
-      <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded slot-booked-ob border"></span><span class="text-slate-400">Outbound</span></div>
-      <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded slot-booked-ib border"></span><span class="text-slate-400">Inbound</span></div>
-      <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded slot-arrived border"></span><span class="text-slate-400">Arrived</span></div>
-    </div>
-    <div id="slotGrid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"></div>
-  </section>
-
-  <section id="dashboardTab" class="tab-content hidden">
-    <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
-      <div>
-        <h2 class="text-2xl font-bold">Yard Dashboard</h2>
-        <p class="text-sm text-slate-400" id="dashSubtitle">Mark trucks as arrived or completed.</p>
-      </div>
-      <div class="flex gap-2 items-center">
-        <div class="flex items-center gap-1.5 text-xs text-slate-400 mr-2">
-          <span class="pulse-dot w-2 h-2 rounded-full bg-ob-500"></span>
-          <span id="lastRefresh">—</span>
-        </div>
-        <button id="refreshDash" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">↻</button>
-      </div>
-    </div>
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-      <div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
-        <div class="text-xs text-slate-400 uppercase tracking-wide">Today · Outbound</div>
-        <div class="text-2xl font-bold text-ob-500 mt-1" id="statOB">0</div>
-      </div>
-      <div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
-        <div class="text-xs text-slate-400 uppercase tracking-wide">Today · Inbound</div>
-        <div class="text-2xl font-bold text-ib-500 mt-1" id="statIB">0</div>
-      </div>
-      <div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
-        <div class="text-xs text-slate-400 uppercase tracking-wide">On Site Now</div>
-        <div class="text-2xl font-bold text-amber-500 mt-1" id="statArrived">0</div>
-      </div>
-      <div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
-        <div class="text-xs text-slate-400 uppercase tracking-wide">Completed</div>
-        <div class="text-2xl font-bold text-slate-400 mt-1" id="statDone">0</div>
-      </div>
-    </div>
-    <div id="dashList" class="space-y-2"></div>
-    <div id="dashEmpty" class="hidden text-center py-12 text-slate-500"><p class="text-sm">No bookings for today yet.</p></div>
-  </section>
-
-  <section id="adminTab" class="tab-content hidden">
-    <div id="adminGate" class="max-w-sm mx-auto mt-10">
-      <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700 text-center">
-        <div class="text-4xl mb-3">🔒</div>
-        <h2 class="text-xl font-bold mb-1">Admin Access</h2>
-        <p class="text-sm text-slate-400 mb-4">Enter PIN to manage materials, carriers, and edit bookings.</p>
-        <input type="password" id="pinInput" maxlength="4" inputmode="numeric" class="w-full px-4 py-3 rounded-lg bg-slate-900 border border-slate-700 text-center text-2xl font-mono tracking-widest" placeholder="••••">
-        <button id="pinSubmit" class="w-full mt-3 py-2.5 rounded-lg bg-ob-600 hover:bg-ob-700 font-semibold text-white">Unlock</button>
-        <div id="pinError" class="hidden mt-2 text-xs text-red-400">Incorrect PIN</div>
-      </div>
-    </div>
-    <div id="adminContent" class="hidden">
-      <div class="flex items-center justify-between mb-5 flex-wrap gap-3">
-        <div>
-          <h2 class="text-2xl font-bold">Admin</h2>
-          <p class="text-sm text-slate-400">Manage materials, carriers, and edit bookings.</p>
-        </div>
-        <button id="adminLock" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">🔒 Lock</button>
-      </div>
-      <div class="bg-ob-900/30 border border-ob-700 rounded-lg p-3 mb-5 text-sm text-ob-500">
-        ✓ Admin mode active — tap any booking in the Yard Dashboard to edit.
-      </div>
-      <div class="flex gap-1 border-b border-slate-800 mb-5 overflow-x-auto">
-        <button class="admin-subtab px-4 py-2 text-sm font-semibold border-b-2 border-ob-500 text-slate-100 whitespace-nowrap" data-subtab="materials">Materials</button>
-        <button class="admin-subtab px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 whitespace-nowrap" data-subtab="carriers">Carriers</button>
-        <button class="admin-subtab px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 whitespace-nowrap" data-subtab="scorecard">📊 Scorecards</button>
-      </div>
-      <div id="adminMaterials" class="admin-subpanel">
-        <div class="bg-slate-800 rounded-lg p-4 border border-slate-700 mb-4">
-          <h3 class="text-sm font-bold mb-3 text-slate-300">Add Material</h3>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
-            <input id="newMatName" type="text" placeholder="Material name" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm">
-            <select id="newMatDir" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm">
-              <option value="outbound">Outbound (Bales)</option>
-              <option value="inbound">Inbound</option>
-              <option value="both">Both</option>
-            </select>
-            <button id="addMatBtn" class="px-4 py-2 rounded bg-ob-600 hover:bg-ob-700 font-semibold text-sm text-white">+ Add Material</button>
-          </div>
-        </div>
-        <div id="matList" class="space-y-1"></div>
-      </div>
-      <div id="adminCarriers" class="admin-subpanel hidden">
-        <div class="bg-slate-800 rounded-lg p-4 border border-slate-700 mb-4">
-          <h3 class="text-sm font-bold mb-3 text-slate-300">Add Carrier</h3>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-            <input id="newCarName" type="text" placeholder="Carrier / company name" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm">
-            <button id="addCarBtn" class="px-4 py-2 rounded bg-ob-600 hover:bg-ob-700 font-semibold text-sm text-white">+ Add Carrier</button>
-          </div>
-        </div>
-        <div id="carList" class="space-y-1"></div>
-      </div>
-      <div id="adminScorecard" class="admin-subpanel hidden">
-        <div class="bg-slate-800 rounded-lg p-4 border border-slate-700 mb-4">
-          <h3 class="text-sm font-bold mb-2 text-slate-300">📊 Carrier Performance — Last 30 Days</h3>
-          <p class="text-xs text-slate-500">On-time percentage based on scheduled vs actual arrival. ±10 min window counts as on-time.</p>
-        </div>
-        <div id="scoreList" class="space-y-2"></div>
-      </div>
-    </div>
-  </section>
-
-  <section id="settingsTab" class="tab-content hidden">
-    <h2 class="text-2xl font-bold mb-2">Settings</h2>
-    <p class="text-sm text-slate-400 mb-4">Database credentials are built in. These fields are only for rotating keys.</p>
-    <div class="bg-slate-800 rounded-lg p-5 border border-slate-700 space-y-4 max-w-xl">
-      <div>
-        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Supabase URL (override)</label>
-        <input id="supabaseUrl" class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 font-mono text-sm" placeholder="Leave blank to use default">
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Supabase Anon Key (override)</label>
-        <textarea id="supabaseKey" rows="3" class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 font-mono text-xs" placeholder="Leave blank to use default"></textarea>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Yard Hours</label>
-        <div class="flex gap-2 items-center">
-          <input id="startHour" type="number" min="0" max="23" class="w-20 px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm">
-          <span class="text-slate-500">to</span>
-          <input id="endHour" type="number" min="1" max="24" class="w-20 px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm">
-          <span class="text-slate-500 text-sm">(24h)</span>
-        </div>
-      </div>
-      <div class="flex gap-2">
-        <button id="saveSettings" class="flex-1 py-2.5 rounded-lg bg-ob-600 hover:bg-ob-700 font-semibold text-white">Save</button>
-        <button id="resetSettings" class="px-4 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 font-semibold text-white text-sm">Reset</button>
-      </div>
-      <div id="settingsStatus" class="text-xs text-slate-400 text-center"></div>
-    </div>
-  </section>
-</main>
-
-<!-- BOOKING MODAL -->
-<div id="bookModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-end md:items-center justify-center p-0 md:p-4">
-  <div class="bg-slate-900 w-full md:max-w-md rounded-t-2xl md:rounded-2xl border-t md:border border-slate-700 max-h-[95vh] overflow-y-auto">
-    <div class="p-5 border-b border-slate-800 flex items-center justify-between sticky top-0 bg-slate-900 z-10">
-      <div>
-        <h3 class="text-lg font-bold">Book Time Slot</h3>
-        <p id="modalSlotTime" class="text-sm text-slate-400 font-mono">—</p>
-      </div>
-      <button id="closeModal" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center">✕</button>
-    </div>
-    <div class="p-5 space-y-4">
-      <div>
-        <label class="block text-xs font-semibold text-slate-400 uppercase mb-2">Direction</label>
-        <div class="grid grid-cols-2 gap-2">
-          <button class="dir-btn py-3 rounded-lg border-2 border-slate-700 font-semibold" data-dir="outbound">
-            <div class="text-ob-500">OUTBOUND</div>
-            <div class="text-xs text-slate-400 font-normal mt-0.5">Bales / Revenue</div>
-          </button>
-          <button class="dir-btn py-3 rounded-lg border-2 border-slate-700 font-semibold" data-dir="inbound">
-            <div class="text-ib-500">INBOUND</div>
-            <div class="text-xs text-slate-400 font-normal mt-0.5">Delivery</div>
-          </button>
-        </div>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Material</label>
-        <select id="modalMaterial" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700">
-          <option value="">-- Select direction first --</option>
-        </select>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Carrier / Company</label>
-        <input id="modalCarrier" type="text" list="carrierList" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700" placeholder="Type or pick a carrier">
-        <datalist id="carrierList"></datalist>
-      </div>
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">BOL # (opt)</label>
-          <input id="modalBOL" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm" placeholder="289085">
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Release # (opt)</label>
-          <input id="modalRelease" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm" placeholder="52633">
-        </div>
-      </div>
-      <div class="grid grid-cols-3 gap-3">
-        <div>
-          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">PO #</label>
-          <input id="modalPO" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Truck ID</label>
-          <input id="modalTruck" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm" placeholder="Tractor">
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Trailer ID</label>
-          <input id="modalTrailer" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm" placeholder="Trailer">
-        </div>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Notes (opt)</label>
-        <textarea id="modalNotes" rows="2" class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm"></textarea>
-      </div>
-      <button id="confirmBook" class="w-full py-3 rounded-lg bg-ob-600 hover:bg-ob-700 font-bold text-white disabled:opacity-50 disabled:cursor-not-allowed">
-        Confirm Booking
-      </button>
-    </div>
-  </div>
-</div>
-
-<!-- COMPLETE MODAL -->
-<div id="completeModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-end md:items-center justify-center p-0 md:p-4">
-  <div class="bg-slate-900 w-full md:max-w-md rounded-t-2xl md:rounded-2xl border-t md:border border-slate-700 max-h-[95vh] overflow-y-auto">
-    <div class="p-5 border-b border-slate-800 flex items-center justify-between sticky top-0 bg-slate-900 z-10">
-      <div>
-        <h3 class="text-lg font-bold">Complete Load</h3>
-        <p id="completeModalSummary" class="text-sm text-slate-400">—</p>
-      </div>
-      <button id="closeCompleteModal" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center">✕</button>
-    </div>
-    <div class="p-5 space-y-4">
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">BOL #</label>
-          <input id="completeBOL" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Release #</label>
-          <input id="completeRelease" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
-        </div>
-      </div>
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Truck ID</label>
-          <input id="completeTruck" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Trailer ID</label>
-          <input id="completeTrailer" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
-        </div>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">BOL Attachment (photo or PDF)</label>
-        <!-- Three separate file inputs for clarity -->
-        <input type="file" id="bolCameraInput" accept="image/*" capture="environment" class="hidden">
-        <input type="file" id="bolLibraryInput" accept="image/*" class="hidden">
-        <input type="file" id="bolFileInput" class="hidden">
-        <div class="grid grid-cols-3 gap-2">
-          <button id="bolCameraBtn" class="py-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold">📷 Take Photo</button>
-          <button id="bolLibraryBtn" class="py-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold">🖼️ Photos</button>
-          <button id="bolFileBtn" class="py-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold">📎 File / PDF</button>
-        </div>
-        <div id="bolFilePreview" class="hidden mt-3">
-          <!-- Preview content rendered dynamically -->
-          <div id="bolFilePreviewContent"></div>
-          <button id="removeBolPhoto" class="mt-2 text-xs text-red-400 hover:text-red-300">Remove attachment</button>
-        </div>
-        <div id="bolUploadProgress" class="hidden mt-2 text-xs text-slate-400">Uploading…</div>
-      </div>
-      <button id="confirmComplete" class="w-full py-3 rounded-lg bg-ob-600 hover:bg-ob-700 font-bold text-white disabled:opacity-50">
-        Mark Complete
-      </button>
-    </div>
-  </div>
-</div>
-
-<!-- EDIT BOOKING MODAL -->
-<div id="editModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-end md:items-center justify-center p-0 md:p-4">
-  <div class="bg-slate-900 w-full md:max-w-md rounded-t-2xl md:rounded-2xl border-t md:border border-slate-700 max-h-[95vh] overflow-y-auto">
-    <div class="p-5 border-b border-slate-800 flex items-center justify-between sticky top-0 bg-slate-900 z-10">
-      <div>
-        <h3 class="text-lg font-bold">✏️ Edit Booking</h3>
-        <p id="editModalId" class="text-xs text-slate-500 font-mono">—</p>
-      </div>
-      <button id="closeEditModal" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center">✕</button>
-    </div>
-    <div class="p-5 space-y-4">
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Date</label>
-          <input id="editDate" type="date" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm">
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Hour Slot</label>
-          <select id="editHour" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm"></select>
-        </div>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-400 uppercase mb-2">Direction</label>
-        <div class="grid grid-cols-2 gap-2">
-          <button class="edit-dir-btn py-2.5 rounded-lg border-2 border-slate-700 font-semibold text-sm" data-dir="outbound"><span class="text-ob-500">OUTBOUND</span></button>
-          <button class="edit-dir-btn py-2.5 rounded-lg border-2 border-slate-700 font-semibold text-sm" data-dir="inbound"><span class="text-ib-500">INBOUND</span></button>
-        </div>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Material</label>
-        <select id="editMaterial" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700"></select>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Carrier</label>
-        <input id="editCarrier" type="text" list="carrierList" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700">
-      </div>
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">BOL #</label>
-          <input id="editBOL" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Release #</label>
-          <input id="editRelease" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
-        </div>
-      </div>
-      <div class="grid grid-cols-3 gap-3">
-        <div>
-          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">PO #</label>
-          <input id="editPO" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Truck ID</label>
-          <input id="editTruck" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Trailer ID</label>
-          <input id="editTrailer" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
-        </div>
-      </div>
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Status</label>
-          <select id="editStatus" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm">
-            <option value="booked">Booked</option>
-            <option value="arrived">On Site (Arrived)</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-            <option value="no_show">No Show</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Arrival Type</label>
-          <select id="editArrivalType" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm">
-            <option value="">— None —</option>
-            <option value="early">⏪ Early</option>
-            <option value="on_time">✓ On Time</option>
-            <option value="late">⏩ Late</option>
-          </select>
-        </div>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Notes</label>
-        <textarea id="editNotes" rows="3" class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm"></textarea>
-      </div>
-      <div class="flex gap-2 pt-2">
-        <button id="editSave" class="flex-1 py-3 rounded-lg bg-ob-600 hover:bg-ob-700 font-bold text-white">Save Changes</button>
-        <button id="editDelete" class="px-4 py-3 rounded-lg bg-red-900/50 hover:bg-red-900 font-bold text-red-300 text-sm">🗑️</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div id="photoViewer" class="hidden fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4" onclick="this.classList.add('hidden')">
-  <img id="photoViewerImg" class="max-w-full max-h-full rounded-lg" alt="BOL">
-</div>
-
-<div id="toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-lg shadow-2xl font-semibold text-sm toast-in"></div>
-
-
-<script>
-'use strict';
-
-const DEFAULT_SUPABASE_URL = 'https://csadynnlzbtxrqsiyxjy.supabase.co';
-const DEFAULT_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNzYWR5bm5semJ0eHJxc2l5eGp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0Njk2NjYsImV4cCI6MjA5MjA0NTY2Nn0.HvqgeMvU3QEaH5UlQcbwLUDd6Q4SjSerz9UMSYWZ6co';
-const DEFAULT_START_HOUR = 7;
-const DEFAULT_END_HOUR   = 17;
-const ADMIN_PIN = '2828';
-const BOL_BUCKET = 'bol-photos';
-const ADD_NEW_MATERIAL = '__ADD_NEW__';
-const ON_TIME_WINDOW_MIN = 10;
-
-const App = {
-    state: {
-        supabaseUrl:  DEFAULT_SUPABASE_URL,
-        supabaseKey:  DEFAULT_SUPABASE_KEY,
-        startHour:    DEFAULT_START_HOUR,
-        endHour:      DEFAULT_END_HOUR,
-        activeDate:   new Date().toISOString().slice(0,10),
-        activeTab:    'book',
-        adminUnlocked: false,
-        adminSubtab: 'materials',
-        selectedSlot: null,
-        selectedDir:  null,
-        schedule:     [],
-        materials:    [],
-        carriers:     [],
-        completingBooking: null,
-        editingBooking: null,
-        editingDir: null,
-        pendingBolFile: null,   // { file, previewUrl, isImage, name }
-    },
-
-    init() {
-        this.loadConfig();
-        this.bindEvents();
-        document.getElementById('bookDate').value = this.state.activeDate;
-        this.loadMaterials();
-        this.loadCarriers();
-        this.loadSchedule();
-        setInterval(() => { if (this.state.activeTab === 'dashboard') this.loadSchedule(); }, 30000);
-    },
-
-    loadConfig() {
-        const storedUrl   = localStorage.getItem('dalmex_sb_url');
-        const storedKey   = localStorage.getItem('dalmex_sb_key');
-        const storedStart = localStorage.getItem('dalmex_start_hr');
-        const storedEnd   = localStorage.getItem('dalmex_end_hr');
-        this.state.supabaseUrl = storedUrl || DEFAULT_SUPABASE_URL;
-        this.state.supabaseKey = storedKey || DEFAULT_SUPABASE_KEY;
-        this.state.startHour   = storedStart ? parseInt(storedStart, 10) : DEFAULT_START_HOUR;
-        this.state.endHour     = storedEnd   ? parseInt(storedEnd, 10)   : DEFAULT_END_HOUR;
-        document.getElementById('supabaseUrl').value = storedUrl || '';
-        document.getElementById('supabaseKey').value = storedKey || '';
-        document.getElementById('startHour').value   = this.state.startHour;
-        document.getElementById('endHour').value     = this.state.endHour;
-        this.updateConnStatus();
-    },
-
-    saveConfig() {
-        const urlInput = document.getElementById('supabaseUrl').value.trim().replace(/\/$/, '');
-        const keyInput = document.getElementById('supabaseKey').value.trim();
-        const sh = parseInt(document.getElementById('startHour').value, 10);
-        const eh = parseInt(document.getElementById('endHour').value, 10);
-        if (isNaN(sh) || isNaN(eh) || sh >= eh) { this.toast('Invalid hours', 'error'); return; }
-        if (urlInput) localStorage.setItem('dalmex_sb_url', urlInput); else localStorage.removeItem('dalmex_sb_url');
-        if (keyInput) localStorage.setItem('dalmex_sb_key', keyInput); else localStorage.removeItem('dalmex_sb_key');
-        localStorage.setItem('dalmex_start_hr', sh);
-        localStorage.setItem('dalmex_end_hr', eh);
-        this.state.supabaseUrl = urlInput || DEFAULT_SUPABASE_URL;
-        this.state.supabaseKey = keyInput || DEFAULT_SUPABASE_KEY;
-        this.state.startHour = sh;
-        this.state.endHour = eh;
-        document.getElementById('settingsStatus').textContent = '✓ Saved ' + new Date().toLocaleTimeString();
-        this.updateConnStatus();
-        this.toast('Settings saved', 'success');
-        this.loadSchedule();
-    },
-
-    resetConfig() {
-        ['dalmex_sb_url','dalmex_sb_key','dalmex_start_hr','dalmex_end_hr'].forEach(k => localStorage.removeItem(k));
-        this.loadConfig();
-        this.toast('Reset to defaults', 'success');
-        this.loadSchedule();
-    },
-
-    updateConnStatus() {
-        const el = document.getElementById('connStatus');
-        if (this.state.supabaseUrl && this.state.supabaseKey) {
-            el.innerHTML = '<span class="w-2 h-2 rounded-full bg-ob-500"></span><span>Connected</span>';
-        } else {
-            el.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-500"></span><span>Not configured</span>';
-        }
-    },
-
-    async supabase(endpoint, method = 'GET', body = null) {
-        if (!this.state.supabaseUrl || !this.state.supabaseKey) { this.toast('Database not configured', 'error'); return null; }
-        const url = `${this.state.supabaseUrl}/rest/v1/${endpoint}`;
-        const headers = {
-            'apikey': this.state.supabaseKey,
-            'Authorization': `Bearer ${this.state.supabaseKey}`,
-            'Content-Type': 'application/json',
-        };
-        if (method === 'POST' || method === 'PATCH') headers['Prefer'] = 'return=representation';
-        const opts = { method, headers };
-        if (body) opts.body = JSON.stringify(body);
-        try {
-            const res = await fetch(url, opts);
-            if (!res.ok) {
-                const err = await res.text();
-                console.error(`[Supabase ${method} ${endpoint}]`, res.status, err);
-                this.toast(`API error ${res.status}`, 'error');
-                return null;
-            }
-            if (res.status === 204 || method === 'DELETE') return [];
-            const text = await res.text();
-            return text ? JSON.parse(text) : [];
-        } catch (e) {
-            console.error('[Supabase fetch]', e);
-            this.toast('Network error', 'error');
-            return null;
-        }
-    },
-
-    async uploadBolFile(file, bookingId) {
-        // Preserve original filename extension; fallback to guess from mime type
-        let ext = (file.name.split('.').pop() || '').toLowerCase();
-        if (!ext || ext === file.name.toLowerCase()) {
-            if (file.type === 'application/pdf') ext = 'pdf';
-            else if (file.type.startsWith('image/')) ext = file.type.split('/')[1] || 'jpg';
-            else ext = 'bin';
-        }
-        const path = `bookings/${bookingId}-${Date.now()}.${ext}`;
-        const url = `${this.state.supabaseUrl}/storage/v1/object/${BOL_BUCKET}/${path}`;
-        try {
-            const res = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'apikey': this.state.supabaseKey,
-                    'Authorization': `Bearer ${this.state.supabaseKey}`,
-                    'Content-Type': file.type || 'application/octet-stream',
-                    'x-upsert': 'true',
-                },
-                body: file,
-            });
-            if (!res.ok) {
-                const err = await res.text();
-                console.error('[Storage upload]', res.status, err);
-                this.toast('Upload failed: ' + res.status, 'error');
-                return null;
-            }
-            const publicUrl = `${this.state.supabaseUrl}/storage/v1/object/public/${BOL_BUCKET}/${path}`;
-            return { path, publicUrl };
-        } catch (e) {
-            console.error('[Storage upload]', e);
-            this.toast('Upload network error', 'error');
-            return null;
-        }
-    },
-
-    // File type detection: is this URL/path an image?
-    isImageFile(url) {
-        if (!url) return false;
-        const lower = url.toLowerCase();
-        return /\.(jpg|jpeg|png|gif|webp|heic|heif|bmp)(\?|$)/.test(lower);
-    },
-
-    isPdfFile(url) {
-        if (!url) return false;
-        return /\.pdf(\?|$)/i.test(url);
-    },
-
-    async generateBookingHash(payload) {
-        const enc = new TextEncoder().encode(JSON.stringify(payload) + Date.now());
-        const buf = await crypto.subtle.digest('SHA-256', enc);
-        return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-    },
-
-    async loadMaterials() {
-        const rows = await this.supabase('materials?order=sort_order.asc,name.asc');
-        this.state.materials = rows || [];
-        this.renderMaterialDropdown();
-        if (this.state.activeTab === 'admin' && this.state.adminSubtab === 'materials') this.renderMaterialsAdmin();
-    },
-
-    async loadCarriers() {
-        const rows = await this.supabase('carriers?order=sort_order.asc,name.asc');
-        this.state.carriers = rows || [];
-        this.renderCarrierDatalist();
-        if (this.state.activeTab === 'admin' && this.state.adminSubtab === 'carriers') this.renderCarriersAdmin();
-    },
-
-    async loadSchedule() {
-        if (!this.state.supabaseUrl || !this.state.supabaseKey) { this.renderSlotGrid(); return; }
-        const d = new Date(this.state.activeDate + 'T00:00:00');
-        const from = new Date(d); from.setDate(d.getDate() - 1);
-        const to   = new Date(d); to.setDate(d.getDate() + 2);
-        const rows = await this.supabase(`schedule?time=gte.${from.toISOString()}&time=lt.${to.toISOString()}&order=time.asc`);
-        this.state.schedule = rows || [];
-        if (this.state.activeTab === 'book') this.renderSlotGrid();
-        if (this.state.activeTab === 'dashboard') this.renderDashboard();
-    },
-
-    renderSlotGrid() {
-        const grid = document.getElementById('slotGrid');
-        const date = this.state.activeDate;
-        const slots = [];
-        for (let h = this.state.startHour; h < this.state.endHour; h++) {
-            slots.push({ hour: h, iso: this.localIsoForHour(date, h) });
-        }
-        grid.innerHTML = slots.map(s => {
-            const booking = this.state.schedule.find(r =>
-                new Date(r.time).getTime() === new Date(s.iso).getTime() &&
-                r.status !== 'cancelled' && r.status !== 'no_show'
-            );
-            const hourLabel = this.formatHour(s.hour);
-            const hourEnd   = this.formatHour(s.hour + 1);
-            if (!booking) {
-                return `
-                <button class="slot-btn p-4 rounded-xl bg-slate-800 border border-slate-700 hover:border-ob-500 text-left" data-slot="${s.iso}">
-                    <div class="text-sm font-mono text-slate-400">${hourLabel} – ${hourEnd}</div>
-                    <div class="text-sm font-semibold text-slate-300 mt-1">Available</div>
-                    <div class="text-xs text-slate-500 mt-0.5">Tap to book</div>
-                </button>`;
-            }
-            const cls = booking.status === 'arrived' ? 'slot-arrived'
-                      : booking.status === 'completed' ? 'slot-completed'
-                      : booking.direction === 'outbound' ? 'slot-booked-ob' : 'slot-booked-ib';
-            const dirLabel = booking.direction === 'outbound' ? 'OUTBOUND' : 'INBOUND';
-            const dirColor = booking.direction === 'outbound' ? 'text-ob-500' : 'text-ib-500';
-            let statusLabel = '📋 BOOKED';
-            if (booking.status === 'arrived') {
-                statusLabel = booking.arrival_type === 'late' ? '⏩ LATE'
-                            : booking.arrival_type === 'early' ? '⏪ EARLY' : '🟡 ON SITE';
-            } else if (booking.status === 'completed') statusLabel = '✓ DONE';
-            return `
-            <div class="slot-btn p-4 rounded-xl border-2 ${cls}">
-                <div class="flex justify-between items-start">
-                    <div class="text-sm font-mono text-slate-300">${hourLabel} – ${hourEnd}</div>
-                    <div class="text-xs font-bold ${dirColor}">${dirLabel}</div>
-                </div>
-                <div class="text-sm font-semibold mt-1.5 truncate">${this.esc(booking.carrier)}</div>
-                <div class="text-xs text-slate-400 mt-0.5 truncate">${this.esc(booking.material)}</div>
-                <div class="text-xs mt-1 font-semibold">${statusLabel}</div>
-            </div>`;
-        }).join('');
-        grid.querySelectorAll('[data-slot]').forEach(btn => {
-            btn.addEventListener('click', () => this.openBookModal(btn.dataset.slot));
-        });
-    },
-
-    openBookModal(slotISO) {
-        this.state.selectedSlot = slotISO;
-        this.state.selectedDir = null;
-        const d = new Date(slotISO);
-        const endD = new Date(d.getTime() + 60*60*1000);
-        document.getElementById('modalSlotTime').textContent =
-            `${d.toLocaleDateString()} · ${this.formatHour(d.getHours())} – ${this.formatHour(endD.getHours())}`;
-        document.querySelectorAll('.dir-btn').forEach(b => b.classList.remove('border-ob-500', 'border-ib-500', 'bg-ob-900/30', 'bg-ib-900/30'));
-        document.getElementById('modalMaterial').innerHTML = '<option value="">-- Select direction first --</option>';
-        ['modalCarrier','modalBOL','modalRelease','modalPO','modalTruck','modalTrailer','modalNotes'].forEach(id => document.getElementById(id).value = '');
-        this.updateConfirmBtn();
-        document.getElementById('bookModal').classList.remove('hidden');
-    },
-
-    closeBookModal() {
-        document.getElementById('bookModal').classList.add('hidden');
-        this.state.selectedSlot = null;
-        this.state.selectedDir = null;
-    },
-
-    selectDirection(dir) {
-        this.state.selectedDir = dir;
-        document.querySelectorAll('.dir-btn').forEach(b => {
-            b.classList.remove('border-ob-500', 'border-ib-500', 'bg-ob-900/30', 'bg-ib-900/30');
-            if (b.dataset.dir === dir) {
-                if (dir === 'outbound') b.classList.add('border-ob-500', 'bg-ob-900/30');
-                else b.classList.add('border-ib-500', 'bg-ib-900/30');
-            }
-        });
-        const btn = document.getElementById('confirmBook');
-        btn.classList.remove('bg-ob-600', 'hover:bg-ob-700', 'bg-ib-600', 'hover:bg-ib-700');
-        if (dir === 'outbound') btn.classList.add('bg-ob-600', 'hover:bg-ob-700');
-        else btn.classList.add('bg-ib-600', 'hover:bg-ib-700');
-        this.renderMaterialDropdown();
-        this.updateConfirmBtn();
-    },
-
-    renderMaterialDropdown() {
-        const sel = document.getElementById('modalMaterial');
-        if (!this.state.selectedDir) { sel.innerHTML = '<option value="">-- Select direction first --</option>'; return; }
-        const items = this.state.materials.filter(m =>
-            m.active && (m.direction === this.state.selectedDir || m.direction === 'both')
-        );
-        sel.innerHTML = '<option value="">-- Select material --</option>' +
-            items.map(m => `<option value="${this.esc(m.name)}">${this.esc(m.name)}</option>`).join('') +
-            `<option value="${ADD_NEW_MATERIAL}">➕ Add new material…</option>`;
-    },
-
-    renderEditMaterialDropdown() {
-        const sel = document.getElementById('editMaterial');
-        if (!this.state.editingDir) { sel.innerHTML = '<option value="">-- Select direction --</option>'; return; }
-        const items = this.state.materials.filter(m =>
-            m.active && (m.direction === this.state.editingDir || m.direction === 'both')
-        );
-        const current = this.state.editingBooking ? this.state.editingBooking.material : '';
-        const hasCurrent = items.some(m => m.name === current);
-        let html = '<option value="">-- Select material --</option>' +
-            items.map(m => `<option value="${this.esc(m.name)}">${this.esc(m.name)}</option>`).join('');
-        if (current && !hasCurrent) html += `<option value="${this.esc(current)}">${this.esc(current)} (archived)</option>`;
-        sel.innerHTML = html;
-        sel.value = current;
-    },
-
-    renderCarrierDatalist() {
-        document.getElementById('carrierList').innerHTML = this.state.carriers
-            .filter(c => c.active).map(c => `<option value="${this.esc(c.name)}">`).join('');
-    },
-
-    async handleMaterialChange() {
-        const sel = document.getElementById('modalMaterial');
-        if (sel.value === ADD_NEW_MATERIAL) {
-            const name = prompt('New material name:');
-            if (!name || !name.trim()) { sel.value = ''; this.updateConfirmBtn(); return; }
-            const trimmed = name.trim();
-            const existing = this.state.materials.find(m =>
-                m.name.toLowerCase() === trimmed.toLowerCase() &&
-                (m.direction === this.state.selectedDir || m.direction === 'both')
-            );
-            if (existing) {
-                sel.value = existing.name;
-                this.toast('Already exists — selected', 'info');
-                this.updateConfirmBtn();
-                return;
-            }
-            const res = await this.supabase('materials', 'POST', {
-                name: trimmed, direction: this.state.selectedDir, sort_order: 500,
-            });
-            if (res && res.length) {
-                this.toast('✓ Material added', 'success');
-                await this.loadMaterials();
-                document.getElementById('modalMaterial').value = trimmed;
-            } else {
-                sel.value = '';
-                this.toast('Failed to add', 'error');
-            }
-        }
-        this.updateConfirmBtn();
-    },
-
-    updateConfirmBtn() {
-        const mat = document.getElementById('modalMaterial').value.trim();
-        const car = document.getElementById('modalCarrier').value.trim();
-        const validMat = mat && mat !== ADD_NEW_MATERIAL;
-        document.getElementById('confirmBook').disabled = !(this.state.selectedDir && validMat && car);
-    },
-
-    async confirmBooking() {
-        const btn = document.getElementById('confirmBook');
-        btn.disabled = true;
-        btn.textContent = 'Booking…';
-        const payload = {
-            time:           this.state.selectedSlot,
-            direction:      this.state.selectedDir,
-            material:       document.getElementById('modalMaterial').value.trim(),
-            carrier:        document.getElementById('modalCarrier').value.trim(),
-            bol_number:     document.getElementById('modalBOL').value.trim() || null,
-            release_number: document.getElementById('modalRelease').value.trim() || null,
-            po_number:      document.getElementById('modalPO').value.trim() || null,
-            truck_id:       document.getElementById('modalTruck').value.trim() || null,
-            trailer_id:     document.getElementById('modalTrailer').value.trim() || null,
-            notes:          document.getElementById('modalNotes').value.trim() || null,
-            status:         'booked',
-        };
-        payload.booking_hash = await this.generateBookingHash(payload);
-        const res = await this.supabase('schedule', 'POST', payload);
-        btn.disabled = false;
-        btn.textContent = 'Confirm Booking';
-        if (res && res.length) {
-            const carName = payload.carrier;
-            if (carName && !this.state.carriers.find(c => c.name.toLowerCase() === carName.toLowerCase())) {
-                await this.supabase('carriers', 'POST', { name: carName, sort_order: 500 });
-                this.loadCarriers();
-            }
-            this.toast('✓ Booking confirmed', 'success');
-            this.closeBookModal();
-            await this.loadSchedule();
-        } else {
-            this.toast('Slot may already be taken', 'error');
-            await this.loadSchedule();
-        }
-    },
-
-    detectArrivalType(scheduledTime, actualTime) {
-        const scheduled = new Date(scheduledTime).getTime();
-        const actual = new Date(actualTime).getTime();
-        const diffMin = Math.round((actual - scheduled) / 60000);
-        let type;
-        if (diffMin < -ON_TIME_WINDOW_MIN) type = 'early';
-        else if (diffMin > ON_TIME_WINDOW_MIN) type = 'late';
-        else type = 'on_time';
-        return { type, diffMin };
-    },
-
-    buildArrivalNote(type, diffMin, existingNotes) {
-        if (type === 'on_time') return existingNotes;
-        let addition;
-        if (type === 'late') addition = `Arrived ${diffMin} min late`;
-        else if (type === 'early') addition = `Arrived ${Math.abs(diffMin)} min early`;
-        if (!existingNotes || !existingNotes.trim()) return addition;
-        if (existingNotes.includes(addition)) return existingNotes;
-        return existingNotes + ' · ' + addition;
-    },
-
-    // Renders the correct attachment element (image thumb OR PDF card) in dashboard row
-    renderAttachmentThumb(url) {
-        if (!url) return '';
-        if (this.isImageFile(url)) {
-            return `<img src="${this.esc(url)}" class="bol-thumb w-14 h-14 rounded-lg border border-slate-600 object-cover cursor-pointer" data-attachment="${this.esc(url)}" data-type="image" alt="BOL">`;
-        }
-        if (this.isPdfFile(url)) {
-            return `<div class="bol-thumb pdf-card w-14 h-14 rounded-lg border border-red-800 flex flex-col items-center justify-center cursor-pointer" data-attachment="${this.esc(url)}" data-type="pdf" title="PDF — tap to open">
-                <div class="text-white text-xs font-bold">PDF</div>
-                <div class="text-red-200 text-[10px] mt-0.5">📄</div>
-            </div>`;
-        }
-        // Generic fallback for other file types
-        return `<div class="bol-thumb bg-slate-700 w-14 h-14 rounded-lg border border-slate-600 flex items-center justify-center cursor-pointer" data-attachment="${this.esc(url)}" data-type="other" title="File — tap to open">
-            <div class="text-white text-xs font-bold">📎</div>
-        </div>`;
-    },
-
-    renderDashboard() {
-        const today = this.state.activeDate;
-        const rows = this.state.schedule.filter(r => r.time.slice(0,10) === today)
-            .sort((a,b) => new Date(a.time) - new Date(b.time));
-        let ob=0, ib=0, arrived=0, done=0;
-        rows.forEach(r => {
-            if (r.status === 'cancelled' || r.status === 'no_show') return;
-            if (r.direction === 'outbound') ob++; else ib++;
-            if (r.status === 'arrived') arrived++;
-            if (r.status === 'completed') done++;
-        });
-        document.getElementById('statOB').textContent = ob;
-        document.getElementById('statIB').textContent = ib;
-        document.getElementById('statArrived').textContent = arrived;
-        document.getElementById('statDone').textContent = done;
-
-        document.getElementById('dashSubtitle').textContent = this.state.adminUnlocked
-            ? '✏️ Admin mode — tap Edit on any booking'
-            : 'Mark trucks as arrived or completed.';
-
-        const list = document.getElementById('dashList');
-        const empty = document.getElementById('dashEmpty');
-        if (!rows.length) { list.innerHTML=''; empty.classList.remove('hidden'); return; }
-        empty.classList.add('hidden');
-
-        list.innerHTML = rows.map(r => {
-            const t = new Date(r.time);
-            const hourLabel = this.formatHour(t.getHours());
-            const hourEnd = this.formatHour(t.getHours() + 1);
-            const dirColor = r.direction === 'outbound' ? 'bg-ob-500' : 'bg-ib-500';
-            const dirText  = r.direction === 'outbound' ? 'text-ob-500' : 'text-ib-500';
-            const dirLabel = r.direction === 'outbound' ? 'OUTBOUND' : 'INBOUND';
-            let statusBadge, actionBtns;
-            if (r.status === 'booked') {
-                statusBadge = '<span class="px-2 py-0.5 rounded-full bg-slate-700 text-slate-300 text-xs font-semibold">BOOKED</span>';
-                actionBtns = `
-                    <button class="act-btn px-3 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold" data-id="${r.id}" data-action="arrived">Mark Arrived</button>
-                    <button class="act-btn px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold" data-id="${r.id}" data-action="cancelled">Cancel</button>`;
-            } else if (r.status === 'arrived') {
-                let badgeColor = 'bg-amber-600';
-                let badgeIcon = 'ON SITE';
-                if (r.arrival_type === 'late') { badgeColor = 'bg-red-600'; badgeIcon = '⏩ LATE'; }
-                else if (r.arrival_type === 'early') { badgeColor = 'bg-blue-600'; badgeIcon = '⏪ EARLY'; }
-                else if (r.arrival_type === 'on_time') { badgeColor = 'bg-ob-600'; badgeIcon = '✓ ON TIME'; }
-                statusBadge = `<span class="px-2 py-0.5 rounded-full ${badgeColor} text-white text-xs font-bold pulse-dot">${badgeIcon}</span>`;
-                actionBtns = `
-                    <button class="act-btn px-3 py-2 rounded-lg bg-ob-600 hover:bg-ob-700 text-white text-xs font-bold" data-id="${r.id}" data-action="complete">Mark Complete</button>
-                    <button class="act-btn px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold" data-id="${r.id}" data-action="booked">Undo</button>`;
-            } else if (r.status === 'completed') {
-                let label = 'COMPLETED';
-                if (r.arrival_type === 'late') label = 'DONE · LATE';
-                else if (r.arrival_type === 'early') label = 'DONE · EARLY';
-                else if (r.arrival_type === 'on_time') label = 'DONE · ON TIME';
-                statusBadge = `<span class="px-2 py-0.5 rounded-full bg-ob-700 text-white text-xs font-bold">${label}</span>`;
-                actionBtns = `<button class="act-btn px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold" data-id="${r.id}" data-action="complete">Edit BOL</button>
-                              <button class="act-btn px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold" data-id="${r.id}" data-action="arrived">Reopen</button>`;
-            } else {
-                statusBadge = `<span class="px-2 py-0.5 rounded-full bg-red-900/50 text-red-300 text-xs font-semibold">${r.status.toUpperCase()}</span>`;
-                actionBtns = `<button class="act-btn px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold" data-id="${r.id}" data-action="booked">Restore</button>`;
-            }
-            const bolBits = [];
-            if (r.bol_number)     bolBits.push(`<span class="copyable" data-copy="${this.esc(r.bol_number)}">📋 BOL ${this.esc(r.bol_number)}</span>`);
-            if (r.release_number) bolBits.push(`<span class="copyable" data-copy="${this.esc(r.release_number)}">Rel ${this.esc(r.release_number)}</span>`);
-            if (r.po_number)      bolBits.push(`<span class="copyable" data-copy="${this.esc(r.po_number)}">PO ${this.esc(r.po_number)}</span>`);
-            if (r.truck_id)       bolBits.push(`Truck ${this.esc(r.truck_id)}`);
-            if (r.trailer_id)     bolBits.push(`Trlr ${this.esc(r.trailer_id)}`);
-            const bolLine = bolBits.length ? `<div class="text-xs text-slate-500 mt-1 font-mono flex gap-3 flex-wrap">${bolBits.join('<span class="text-slate-700">·</span>')}</div>` : '';
-            const attachmentThumb = this.renderAttachmentThumb(r.bol_photo_url);
-            const editBadge = this.state.adminUnlocked
-                ? `<button class="edit-booking-btn text-xs text-slate-500 hover:text-ob-500" data-id="${r.id}">✏️ Edit</button>`
-                : '';
-            return `
-            <div class="bg-slate-800 rounded-lg p-4 border border-slate-700 flex items-center gap-4 flex-wrap">
-                <div class="w-1.5 h-14 rounded-full ${dirColor}"></div>
-                <div class="min-w-[110px]">
-                    <div class="font-mono font-bold text-lg">${hourLabel}</div>
-                    <div class="text-xs text-slate-500">to ${hourEnd}</div>
-                </div>
-                <div class="flex-1 min-w-[180px]">
-                    <div class="flex items-center gap-2 flex-wrap">
-                        <span class="font-bold ${dirText} text-xs">${dirLabel}</span>
-                        ${statusBadge}
-                        ${editBadge}
-                    </div>
-                    <div class="font-semibold mt-1">${this.esc(r.carrier)}</div>
-                    <div class="text-sm text-slate-400">${this.esc(r.material)}</div>
-                    ${bolLine}
-                    ${r.notes ? `<div class="text-xs text-slate-500 mt-1 italic">"${this.esc(r.notes)}"</div>` : ''}
-                </div>
-                ${attachmentThumb}
-                <div class="flex gap-2 flex-wrap">${actionBtns}</div>
-            </div>`;
-        }).join('');
-
-        list.querySelectorAll('.act-btn').forEach(b => {
-            b.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const id = b.dataset.id, action = b.dataset.action;
-                if (action === 'complete') this.openCompleteModal(id);
-                else this.updateStatus(id, action);
-            });
-        });
-        list.querySelectorAll('.edit-booking-btn').forEach(b => {
-            b.addEventListener('click', e => { e.stopPropagation(); this.openEditModal(b.dataset.id); });
-        });
-        list.querySelectorAll('[data-attachment]').forEach(el => {
-            el.addEventListener('click', e => {
-                e.stopPropagation();
-                const url = el.dataset.attachment;
-                const type = el.dataset.type;
-                if (type === 'image') {
-                    document.getElementById('photoViewerImg').src = url;
-                    document.getElementById('photoViewer').classList.remove('hidden');
-                } else {
-                    // PDF or other file → open in new tab (Safari renders PDFs natively)
-                    window.open(url, '_blank');
-                }
-            });
-        });
-        list.querySelectorAll('.copyable').forEach(el => {
-            el.addEventListener('click', e => {
-                e.stopPropagation();
-                const val = el.dataset.copy;
-                if (navigator.clipboard) {
-                    navigator.clipboard.writeText(val).then(() => this.toast(`Copied: ${val}`, 'success'));
-                } else {
-                    this.toast(`Copy: ${val}`, 'info');
-                }
-            });
-        });
-        document.getElementById('lastRefresh').textContent = 'Updated ' + new Date().toLocaleTimeString();
-    },
-
-    async updateStatus(id, newStatus) {
-        const booking = this.state.schedule.find(r => String(r.id) === String(id));
-        if (!booking) return;
-        const patch = { status: newStatus };
-        if (newStatus === 'arrived') {
-            const now = new Date().toISOString();
-            patch.arrived_at = now;
-            const { type, diffMin } = this.detectArrivalType(booking.time, now);
-            patch.arrival_type = type;
-            const newNote = this.buildArrivalNote(type, diffMin, booking.notes);
-            if (newNote !== booking.notes) patch.notes = newNote;
-        }
-        if (newStatus === 'booked') {
-            patch.arrived_at = null;
-            patch.completed_at = null;
-            patch.arrival_type = null;
-        }
-        const res = await this.supabase(`schedule?id=eq.${id}`, 'PATCH', patch);
-        if (res) {
-            if (newStatus === 'arrived' && patch.arrival_type) {
-                const label = patch.arrival_type === 'late' ? '⏩ Late' : patch.arrival_type === 'early' ? '⏪ Early' : '✓ On Time';
-                this.toast(`Arrived — ${label}`, 'success');
-            } else {
-                this.toast(`Status → ${newStatus.toUpperCase()}`, 'success');
-            }
-            await this.loadSchedule();
-        }
-    },
-
-    openCompleteModal(bookingId) {
-        const booking = this.state.schedule.find(r => String(r.id) === String(bookingId));
-        if (!booking) return;
-        this.state.completingBooking = booking;
-        this.state.pendingBolFile = null;
-        document.getElementById('completeModalSummary').textContent = `${booking.carrier} · ${booking.material}`;
-        document.getElementById('completeBOL').value = booking.bol_number || '';
-        document.getElementById('completeRelease').value = booking.release_number || '';
-        document.getElementById('completeTruck').value = booking.truck_id || '';
-        document.getElementById('completeTrailer').value = booking.trailer_id || '';
-        this.renderBolPreview(booking.bol_photo_url, booking.bol_photo_path);
-        document.getElementById('bolUploadProgress').classList.add('hidden');
-        document.getElementById('bolCameraInput').value = '';
-        document.getElementById('bolLibraryInput').value = '';
-        document.getElementById('bolFileInput').value = '';
-        document.getElementById('completeModal').classList.remove('hidden');
-    },
-
-    renderBolPreview(url, path) {
-        const preview = document.getElementById('bolFilePreview');
-        const content = document.getElementById('bolFilePreviewContent');
-        if (!url) { preview.classList.add('hidden'); content.innerHTML = ''; return; }
-        preview.classList.remove('hidden');
-        if (this.isImageFile(url)) {
-            content.innerHTML = `<img src="${this.esc(url)}" class="w-full rounded-lg border border-slate-700" alt="BOL preview">`;
-        } else if (this.isPdfFile(url)) {
-            const fileName = path ? path.split('/').pop() : 'BOL.pdf';
-            content.innerHTML = `
-                <div class="pdf-card rounded-lg border border-red-800 p-4 flex items-center gap-3 cursor-pointer" onclick="window.open('${this.esc(url)}', '_blank')">
-                    <div class="text-3xl">📄</div>
-                    <div class="flex-1 min-w-0">
-                        <div class="font-bold text-white">PDF Attached</div>
-                        <div class="text-xs text-red-200 truncate font-mono">${this.esc(fileName)}</div>
-                        <div class="text-xs text-red-300 mt-1">Tap to open in browser</div>
-                    </div>
-                </div>`;
-        } else {
-            const fileName = path ? path.split('/').pop() : 'Attachment';
-            content.innerHTML = `
-                <div class="bg-slate-800 rounded-lg border border-slate-700 p-4 flex items-center gap-3 cursor-pointer" onclick="window.open('${this.esc(url)}', '_blank')">
-                    <div class="text-3xl">📎</div>
-                    <div class="flex-1 min-w-0">
-                        <div class="font-bold">File Attached</div>
-                        <div class="text-xs text-slate-400 truncate font-mono">${this.esc(fileName)}</div>
-                        <div class="text-xs text-slate-500 mt-1">Tap to open</div>
-                    </div>
-                </div>`;
-        }
-    },
-
-    closeCompleteModal() {
-        document.getElementById('completeModal').classList.add('hidden');
-        this.state.completingBooking = null;
-        this.state.pendingBolFile = null;
-    },
-
-    handleBolFileSelect(file) {
-        if (!file) return;
-        const isImage = file.type.startsWith('image/');
-        const previewUrl = URL.createObjectURL(file);
-        this.state.pendingBolFile = { file, previewUrl, isImage, name: file.name };
-
-        const preview = document.getElementById('bolFilePreview');
-        const content = document.getElementById('bolFilePreviewContent');
-        preview.classList.remove('hidden');
-
-        if (isImage) {
-            content.innerHTML = `<img src="${previewUrl}" class="w-full rounded-lg border border-slate-700" alt="preview">`;
-        } else if (file.type === 'application/pdf') {
-            content.innerHTML = `
-                <div class="pdf-card rounded-lg border border-red-800 p-4 flex items-center gap-3">
-                    <div class="text-3xl">📄</div>
-                    <div class="flex-1 min-w-0">
-                        <div class="font-bold text-white">PDF Ready to Upload</div>
-                        <div class="text-xs text-red-200 truncate font-mono">${this.esc(file.name)}</div>
-                        <div class="text-xs text-red-300 mt-1">${this.formatBytes(file.size)}</div>
-                    </div>
-                </div>`;
-        } else {
-            content.innerHTML = `
-                <div class="bg-slate-800 rounded-lg border border-slate-700 p-4 flex items-center gap-3">
-                    <div class="text-3xl">📎</div>
-                    <div class="flex-1 min-w-0">
-                        <div class="font-bold">File Ready to Upload</div>
-                        <div class="text-xs text-slate-400 truncate font-mono">${this.esc(file.name)}</div>
-                        <div class="text-xs text-slate-500 mt-1">${this.formatBytes(file.size)}</div>
-                    </div>
-                </div>`;
-        }
-    },
-
-    formatBytes(bytes) {
-        if (bytes < 1024) return bytes + ' B';
-        if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
-        return (bytes / 1048576).toFixed(1) + ' MB';
-    },
-
-    removeBolPhoto() {
-        this.state.pendingBolFile = null;
-        document.getElementById('bolCameraInput').value = '';
-        document.getElementById('bolLibraryInput').value = '';
-        document.getElementById('bolFileInput').value = '';
-        document.getElementById('bolFilePreview').classList.add('hidden');
-        document.getElementById('bolFilePreviewContent').innerHTML = '';
-        if (this.state.completingBooking) {
-            this.state.completingBooking.bol_photo_url = null;
-            this.state.completingBooking.bol_photo_path = null;
-        }
-    },
-
-    async confirmComplete() {
-        const booking = this.state.completingBooking;
-        if (!booking) return;
-        const btn = document.getElementById('confirmComplete');
-        btn.disabled = true;
-        btn.textContent = 'Saving…';
-        const patch = {
-            status: 'completed',
-            completed_at: new Date().toISOString(),
-            bol_number: document.getElementById('completeBOL').value.trim() || null,
-            release_number: document.getElementById('completeRelease').value.trim() || null,
-            truck_id: document.getElementById('completeTruck').value.trim() || null,
-            trailer_id: document.getElementById('completeTrailer').value.trim() || null,
-        };
-        if (!booking.arrival_type && booking.status !== 'arrived') {
-            const { type } = this.detectArrivalType(booking.time, patch.completed_at);
-            patch.arrival_type = type;
-            patch.arrived_at = booking.arrived_at || patch.completed_at;
-        }
-        if (this.state.pendingBolFile) {
-            document.getElementById('bolUploadProgress').classList.remove('hidden');
-            const up = await this.uploadBolFile(this.state.pendingBolFile.file, booking.id);
-            document.getElementById('bolUploadProgress').classList.add('hidden');
-            if (up) { patch.bol_photo_url = up.publicUrl; patch.bol_photo_path = up.path; }
-        } else if (booking.bol_photo_url === null || booking.bol_photo_url === undefined) {
-            patch.bol_photo_url = null;
-            patch.bol_photo_path = null;
-        }
-        const res = await this.supabase(`schedule?id=eq.${booking.id}`, 'PATCH', patch);
-        btn.disabled = false;
-        btn.textContent = 'Mark Complete';
-        if (res) {
-            this.toast('✓ Load completed', 'success');
-            this.closeCompleteModal();
-            await this.loadSchedule();
-        }
-    },
-
-    openEditModal(bookingId) {
-        if (!this.state.adminUnlocked) { this.toast('Unlock admin first', 'error'); return; }
-        const booking = this.state.schedule.find(r => String(r.id) === String(bookingId));
-        if (!booking) return;
-        this.state.editingBooking = booking;
-        this.state.editingDir = booking.direction;
-        document.getElementById('editModalId').textContent = `ID: ${booking.id} · Created ${new Date(booking.created_at).toLocaleString()}`;
-        const t = new Date(booking.time);
-        document.getElementById('editDate').value = booking.time.slice(0, 10);
-        this.populateHourOptions(t.getHours());
-        document.getElementById('editHour').value = t.getHours();
-        document.querySelectorAll('.edit-dir-btn').forEach(b => {
-            b.classList.remove('border-ob-500', 'border-ib-500', 'bg-ob-900/30', 'bg-ib-900/30');
-            if (b.dataset.dir === booking.direction) {
-                if (booking.direction === 'outbound') b.classList.add('border-ob-500', 'bg-ob-900/30');
-                else b.classList.add('border-ib-500', 'bg-ib-900/30');
-            }
-        });
-        this.renderEditMaterialDropdown();
-        document.getElementById('editCarrier').value = booking.carrier || '';
-        document.getElementById('editBOL').value = booking.bol_number || '';
-        document.getElementById('editRelease').value = booking.release_number || '';
-        document.getElementById('editPO').value = booking.po_number || '';
-        document.getElementById('editTruck').value = booking.truck_id || '';
-        document.getElementById('editTrailer').value = booking.trailer_id || '';
-        document.getElementById('editStatus').value = booking.status;
-        document.getElementById('editArrivalType').value = booking.arrival_type || '';
-        document.getElementById('editNotes').value = booking.notes || '';
-        document.getElementById('editModal').classList.remove('hidden');
-    },
-
-    populateHourOptions(selected) {
-        let html = '';
-        for (let h = this.state.startHour; h < this.state.endHour; h++) {
-            html += `<option value="${h}" ${h===selected?'selected':''}>${this.formatHour(h)} – ${this.formatHour(h+1)}</option>`;
-        }
-        document.getElementById('editHour').innerHTML = html;
-    },
-
-    closeEditModal() {
-        document.getElementById('editModal').classList.add('hidden');
-        this.state.editingBooking = null;
-        this.state.editingDir = null;
-    },
-
-    selectEditDirection(dir) {
-        this.state.editingDir = dir;
-        document.querySelectorAll('.edit-dir-btn').forEach(b => {
-            b.classList.remove('border-ob-500', 'border-ib-500', 'bg-ob-900/30', 'bg-ib-900/30');
-            if (b.dataset.dir === dir) {
-                if (dir === 'outbound') b.classList.add('border-ob-500', 'bg-ob-900/30');
-                else b.classList.add('border-ib-500', 'bg-ib-900/30');
-            }
-        });
-        this.renderEditMaterialDropdown();
-    },
-
-    async saveEdit() {
-        const booking = this.state.editingBooking;
-        if (!booking) return;
-        const date = document.getElementById('editDate').value;
-        const hour = parseInt(document.getElementById('editHour').value, 10);
-        const newTime = this.localIsoForHour(date, hour);
-        if (newTime !== booking.time) {
-            const collision = this.state.schedule.find(r =>
-                String(r.id) !== String(booking.id) &&
-                new Date(r.time).getTime() === new Date(newTime).getTime() &&
-                r.status !== 'cancelled' && r.status !== 'no_show'
-            );
-            if (collision) {
-                if (!confirm(`⚠️ Slot already booked by "${collision.carrier}" (${collision.material}).\n\nMove anyway?`)) return;
-            }
-        }
-        const patch = {
-            time: newTime,
-            direction: this.state.editingDir,
-            material: document.getElementById('editMaterial').value.trim(),
-            carrier: document.getElementById('editCarrier').value.trim(),
-            bol_number: document.getElementById('editBOL').value.trim() || null,
-            release_number: document.getElementById('editRelease').value.trim() || null,
-            po_number: document.getElementById('editPO').value.trim() || null,
-            truck_id: document.getElementById('editTruck').value.trim() || null,
-            trailer_id: document.getElementById('editTrailer').value.trim() || null,
-            status: document.getElementById('editStatus').value,
-            arrival_type: document.getElementById('editArrivalType').value || null,
-            notes: document.getElementById('editNotes').value.trim() || null,
-        };
-        if (!patch.material || !patch.carrier) { this.toast('Material and Carrier required', 'error'); return; }
-        const btn = document.getElementById('editSave');
-        btn.disabled = true;
-        btn.textContent = 'Saving…';
-        const res = await this.supabase(`schedule?id=eq.${booking.id}`, 'PATCH', patch);
-        btn.disabled = false;
-        btn.textContent = 'Save Changes';
-        if (res) {
-            this.toast('✓ Booking updated', 'success');
-            this.closeEditModal();
-            await this.loadSchedule();
-        }
-    },
-
-    async deleteBooking() {
-        const booking = this.state.editingBooking;
-        if (!booking) return;
-        if (!confirm(`⚠️ Delete this booking permanently?\n\n${booking.carrier} · ${booking.material}\n${new Date(booking.time).toLocaleString()}\n\nThis cannot be undone.`)) return;
-        const res = await this.supabase(`schedule?id=eq.${booking.id}`, 'DELETE');
-        if (res !== null) {
-            this.toast('✓ Booking deleted', 'success');
-            this.closeEditModal();
-            await this.loadSchedule();
-        }
-    },
-
-    trySubmitPin() {
-        const val = document.getElementById('pinInput').value.trim();
-        if (val === ADMIN_PIN) {
-            this.state.adminUnlocked = true;
-            document.getElementById('adminGate').classList.add('hidden');
-            document.getElementById('adminContent').classList.remove('hidden');
-            document.getElementById('pinError').classList.add('hidden');
-            document.getElementById('pinInput').value = '';
-            this.switchAdminSubtab(this.state.adminSubtab);
-        } else {
-            document.getElementById('pinError').classList.remove('hidden');
-            document.getElementById('pinInput').value = '';
-        }
-    },
-
-    lockAdmin() {
-        this.state.adminUnlocked = false;
-        document.getElementById('adminGate').classList.remove('hidden');
-        document.getElementById('adminContent').classList.add('hidden');
-    },
-
-    switchAdminSubtab(sub) {
-        this.state.adminSubtab = sub;
-        document.querySelectorAll('.admin-subtab').forEach(b => {
-            b.classList.remove('border-ob-500', 'text-slate-100');
-            b.classList.add('border-transparent', 'text-slate-400');
-            if (b.dataset.subtab === sub) {
-                b.classList.add('border-ob-500', 'text-slate-100');
-                b.classList.remove('border-transparent', 'text-slate-400');
-            }
-        });
-        document.querySelectorAll('.admin-subpanel').forEach(p => p.classList.add('hidden'));
-        if (sub === 'materials') { document.getElementById('adminMaterials').classList.remove('hidden'); this.renderMaterialsAdmin(); }
-        if (sub === 'carriers')  { document.getElementById('adminCarriers').classList.remove('hidden');  this.renderCarriersAdmin(); }
-        if (sub === 'scorecard') { document.getElementById('adminScorecard').classList.remove('hidden'); this.renderScorecard(); }
-    },
-
-    renderMaterialsAdmin() {
-        const list = document.getElementById('matList');
-        if (!this.state.materials.length) { list.innerHTML = '<div class="text-center py-8 text-slate-500 text-sm">No materials yet.</div>'; return; }
-        const groups = {
-            outbound: this.state.materials.filter(m => m.direction === 'outbound'),
-            inbound:  this.state.materials.filter(m => m.direction === 'inbound'),
-            both:     this.state.materials.filter(m => m.direction === 'both'),
-        };
-        list.innerHTML = ['outbound','inbound','both'].filter(k => groups[k].length).map(k => {
-            const label = k === 'outbound' ? 'OUTBOUND (Bales)' : k === 'inbound' ? 'INBOUND' : 'BOTH';
-            const color = k === 'outbound' ? 'text-ob-500' : k === 'inbound' ? 'text-ib-500' : 'text-slate-400';
-            return `<div class="mt-3 mb-1 text-xs font-bold uppercase tracking-wide ${color}">${label}</div>
-            ${groups[k].map(m => `
-                <div class="bg-slate-800 rounded-lg p-3 border border-slate-700 flex items-center gap-3 ${m.active ? '' : 'inactive-row'}">
-                    <div class="flex-1 font-semibold">${this.esc(m.name)}</div>
-                    <button class="mat-toggle px-2 py-1 rounded text-xs font-semibold ${m.active ? 'bg-ob-900/50 text-ob-500' : 'bg-slate-700 text-slate-400'}" data-id="${m.id}" data-active="${m.active}">${m.active ? 'Active' : 'Inactive'}</button>
-                    <button class="mat-edit px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-xs" data-id="${m.id}">Edit</button>
-                    <button class="mat-delete px-2 py-1 rounded bg-red-900/50 hover:bg-red-900 text-red-300 text-xs" data-id="${m.id}">Delete</button>
-                </div>`).join('')}`;
-        }).join('');
-        list.querySelectorAll('.mat-toggle').forEach(b => b.addEventListener('click', () => this.toggleMaterial(b.dataset.id, b.dataset.active === 'true')));
-        list.querySelectorAll('.mat-edit').forEach(b => b.addEventListener('click', () => this.editMaterial(b.dataset.id)));
-        list.querySelectorAll('.mat-delete').forEach(b => b.addEventListener('click', () => this.deleteMaterial(b.dataset.id)));
-    },
-
-    async addMaterial() {
-        const name = document.getElementById('newMatName').value.trim();
-        const dir = document.getElementById('newMatDir').value;
-        if (!name) { this.toast('Name required', 'error'); return; }
-        const res = await this.supabase('materials', 'POST', { name, direction: dir, sort_order: 500 });
-        if (res) { document.getElementById('newMatName').value = ''; this.toast('✓ Material added', 'success'); await this.loadMaterials(); }
-    },
-    async toggleMaterial(id, active) { const r = await this.supabase(`materials?id=eq.${id}`, 'PATCH', { active: !active }); if (r) await this.loadMaterials(); },
-    async editMaterial(id) {
-        const m = this.state.materials.find(x => String(x.id) === String(id));
-        if (!m) return;
-        const n = prompt('Rename material:', m.name);
-        if (n === null || !n.trim() || n.trim() === m.name) return;
-        const r = await this.supabase(`materials?id=eq.${id}`, 'PATCH', { name: n.trim() });
-        if (r) { this.toast('✓ Renamed', 'success'); await this.loadMaterials(); }
-    },
-    async deleteMaterial(id) {
-        const m = this.state.materials.find(x => String(x.id) === String(id));
-        if (!m) return;
-        if (!confirm(`Delete "${m.name}"?`)) return;
-        const r = await this.supabase(`materials?id=eq.${id}`, 'DELETE');
-        if (r !== null) { this.toast('✓ Deleted', 'success'); await this.loadMaterials(); }
-    },
-
-    renderCarriersAdmin() {
-        const list = document.getElementById('carList');
-        if (!this.state.carriers.length) { list.innerHTML = '<div class="text-center py-8 text-slate-500 text-sm">No carriers yet.</div>'; return; }
-        list.innerHTML = this.state.carriers.map(c => `
-            <div class="bg-slate-800 rounded-lg p-3 border border-slate-700 flex items-center gap-3 ${c.active ? '' : 'inactive-row'}">
-                <div class="flex-1 font-semibold">${this.esc(c.name)}</div>
-                <button class="car-toggle px-2 py-1 rounded text-xs font-semibold ${c.active ? 'bg-ob-900/50 text-ob-500' : 'bg-slate-700 text-slate-400'}" data-id="${c.id}" data-active="${c.active}">${c.active ? 'Active' : 'Inactive'}</button>
-                <button class="car-edit px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-xs" data-id="${c.id}">Edit</button>
-                <button class="car-delete px-2 py-1 rounded bg-red-900/50 hover:bg-red-900 text-red-300 text-xs" data-id="${c.id}">Delete</button>
-            </div>`).join('');
-        list.querySelectorAll('.car-toggle').forEach(b => b.addEventListener('click', () => this.toggleCarrier(b.dataset.id, b.dataset.active === 'true')));
-        list.querySelectorAll('.car-edit').forEach(b => b.addEventListener('click', () => this.editCarrier(b.dataset.id)));
-        list.querySelectorAll('.car-delete').forEach(b => b.addEventListener('click', () => this.deleteCarrier(b.dataset.id)));
-    },
-
-    async addCarrier() {
-        const name = document.getElementById('newCarName').value.trim();
-        if (!name) { this.toast('Name required', 'error'); return; }
-        const r = await this.supabase('carriers', 'POST', { name, sort_order: 500 });
-        if (r) { document.getElementById('newCarName').value = ''; this.toast('✓ Carrier added', 'success'); await this.loadCarriers(); }
-    },
-    async toggleCarrier(id, active) { const r = await this.supabase(`carriers?id=eq.${id}`, 'PATCH', { active: !active }); if (r) await this.loadCarriers(); },
-    async editCarrier(id) {
-        const c = this.state.carriers.find(x => String(x.id) === String(id));
-        if (!c) return;
-        const n = prompt('Rename carrier:', c.name);
-        if (n === null || !n.trim() || n.trim() === c.name) return;
-        const r = await this.supabase(`carriers?id=eq.${id}`, 'PATCH', { name: n.trim() });
-        if (r) { this.toast('✓ Renamed', 'success'); await this.loadCarriers(); }
-    },
-    async deleteCarrier(id) {
-        const c = this.state.carriers.find(x => String(x.id) === String(id));
-        if (!c) return;
-        if (!confirm(`Delete "${c.name}"?`)) return;
-        const r = await this.supabase(`carriers?id=eq.${id}`, 'DELETE');
-        if (r !== null) { this.toast('✓ Deleted', 'success'); await this.loadCarriers(); }
-    },
-
-    async renderScorecard() {
-        const list = document.getElementById('scoreList');
-        list.innerHTML = '<div class="text-center py-6 text-slate-500 text-sm">Loading…</div>';
-        const since = new Date();
-        since.setDate(since.getDate() - 30);
-        const rows = await this.supabase(
-            `schedule?arrival_type=not.is.null&time=gte.${since.toISOString()}&select=carrier,arrival_type,status`
-        );
-        if (!rows || !rows.length) {
-            list.innerHTML = '<div class="text-center py-8 text-slate-500 text-sm">No arrival data yet in last 30 days.<br><span class="text-xs">Once trucks are marked arrived, scorecards appear here.</span></div>';
-            return;
-        }
-        const agg = {};
-        rows.forEach(r => {
-            if (!agg[r.carrier]) agg[r.carrier] = { total: 0, on_time: 0, early: 0, late: 0 };
-            agg[r.carrier].total++;
-            agg[r.carrier][r.arrival_type]++;
-        });
-        const sorted = Object.entries(agg).map(([name, s]) => ({
-            name, ...s,
-            onTimePct: (s.on_time / s.total) * 100,
-            earlyPct: (s.early / s.total) * 100,
-            latePct: (s.late / s.total) * 100,
-        })).sort((a,b) => b.onTimePct - a.onTimePct);
-
-        list.innerHTML = sorted.map(c => {
-            const gradeColor = c.onTimePct >= 85 ? 'text-ob-500' : c.onTimePct >= 70 ? 'text-amber-500' : 'text-red-400';
-            const grade = c.onTimePct >= 85 ? 'A' : c.onTimePct >= 70 ? 'B' : c.onTimePct >= 50 ? 'C' : 'D';
-            return `
-            <div class="bg-slate-800 rounded-lg p-4 border border-slate-700">
-                <div class="flex items-center justify-between mb-2">
-                    <div class="font-bold">${this.esc(c.name)}</div>
-                    <div class="flex items-center gap-2">
-                        <span class="text-2xl font-extrabold ${gradeColor}">${grade}</span>
-                        <span class="text-xs text-slate-500">${c.total} trips</span>
-                    </div>
-                </div>
-                <div class="flex h-2 rounded-full overflow-hidden bg-slate-900">
-                    <div class="bg-blue-500 score-bar" style="width: ${c.earlyPct}%"></div>
-                    <div class="bg-ob-500 score-bar" style="width: ${c.onTimePct}%"></div>
-                    <div class="bg-red-500 score-bar" style="width: ${c.latePct}%"></div>
-                </div>
-                <div class="flex justify-between mt-2 text-xs font-mono">
-                    <span class="text-blue-400">⏪ ${c.early} early (${c.earlyPct.toFixed(0)}%)</span>
-                    <span class="text-ob-500">✓ ${c.on_time} on-time (${c.onTimePct.toFixed(0)}%)</span>
-                    <span class="text-red-400">⏩ ${c.late} late (${c.latePct.toFixed(0)}%)</span>
-                </div>
-            </div>`;
-        }).join('');
-    },
-
-    switchTab(tab) {
-        this.state.activeTab = tab;
-        document.querySelectorAll('.tab-btn').forEach(b => {
-            b.classList.remove('tab-active');
-            b.classList.add('text-slate-400');
-            if (b.dataset.tab === tab) { b.classList.add('tab-active'); b.classList.remove('text-slate-400'); }
-        });
-        document.querySelectorAll('.tab-content').forEach(s => s.classList.add('hidden'));
-        document.getElementById(tab + 'Tab').classList.remove('hidden');
-        if (tab === 'book') this.renderSlotGrid();
-        if (tab === 'dashboard') this.loadSchedule();
-        if (tab === 'admin') {
-            if (this.state.adminUnlocked) {
-                document.getElementById('adminGate').classList.add('hidden');
-                document.getElementById('adminContent').classList.remove('hidden');
-                this.switchAdminSubtab(this.state.adminSubtab);
-            } else {
-                document.getElementById('adminGate').classList.remove('hidden');
-                document.getElementById('adminContent').classList.add('hidden');
-                setTimeout(() => document.getElementById('pinInput').focus(), 100);
-            }
-        }
-    },
-
-    bindEvents() {
-        document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => this.switchTab(b.dataset.tab)));
-        document.getElementById('bookDate').addEventListener('change', e => { this.state.activeDate = e.target.value; this.loadSchedule(); });
-        document.getElementById('prevDay').addEventListener('click', () => this.shiftDay(-1));
-        document.getElementById('nextDay').addEventListener('click', () => this.shiftDay(1));
-        document.getElementById('todayBtn').addEventListener('click', () => {
-            this.state.activeDate = new Date().toISOString().slice(0,10);
-            document.getElementById('bookDate').value = this.state.activeDate;
-            this.loadSchedule();
-        });
-
-        document.getElementById('closeModal').addEventListener('click', () => this.closeBookModal());
-        document.getElementById('bookModal').addEventListener('click', e => { if (e.target.id === 'bookModal') this.closeBookModal(); });
-        document.querySelectorAll('.dir-btn').forEach(b => b.addEventListener('click', () => this.selectDirection(b.dataset.dir)));
-        document.getElementById('modalMaterial').addEventListener('change', () => this.handleMaterialChange());
-        document.getElementById('modalCarrier').addEventListener('input', () => this.updateConfirmBtn());
-        document.getElementById('confirmBook').addEventListener('click', () => this.confirmBooking());
-
-        document.getElementById('closeCompleteModal').addEventListener('click', () => this.closeCompleteModal());
-        document.getElementById('completeModal').addEventListener('click', e => { if (e.target.id === 'completeModal') this.closeCompleteModal(); });
-        document.getElementById('bolCameraBtn').addEventListener('click', () => document.getElementById('bolCameraInput').click());
-        document.getElementById('bolLibraryBtn').addEventListener('click', () => document.getElementById('bolLibraryInput').click());
-        document.getElementById('bolFileBtn').addEventListener('click', () => document.getElementById('bolFileInput').click());
-        document.getElementById('bolCameraInput').addEventListener('change', e => this.handleBolFileSelect(e.target.files[0]));
-        document.getElementById('bolLibraryInput').addEventListener('change', e => this.handleBolFileSelect(e.target.files[0]));
-        document.getElementById('bolFileInput').addEventListener('change', e => this.handleBolFileSelect(e.target.files[0]));
-        document.getElementById('removeBolPhoto').addEventListener('click', () => this.removeBolPhoto());
-        document.getElementById('confirmComplete').addEventListener('click', () => this.confirmComplete());
-
-        document.getElementById('closeEditModal').addEventListener('click', () => this.closeEditModal());
-        document.getElementById('editModal').addEventListener('click', e => { if (e.target.id === 'editModal') this.closeEditModal(); });
-        document.querySelectorAll('.edit-dir-btn').forEach(b => b.addEventListener('click', () => this.selectEditDirection(b.dataset.dir)));
-        document.getElementById('editSave').addEventListener('click', () => this.saveEdit());
-        document.getElementById('editDelete').addEventListener('click', () => this.deleteBooking());
-
-        document.getElementById('refreshDash').addEventListener('click', () => this.loadSchedule());
-
-        document.getElementById('pinSubmit').addEventListener('click', () => this.trySubmitPin());
-        document.getElementById('pinInput').addEventListener('keypress', e => { if (e.key === 'Enter') this.trySubmitPin(); });
-        document.getElementById('adminLock').addEventListener('click', () => this.lockAdmin());
-        document.querySelectorAll('.admin-subtab').forEach(b => b.addEventListener('click', () => this.switchAdminSubtab(b.dataset.subtab)));
-        document.getElementById('addMatBtn').addEventListener('click', () => this.addMaterial());
-        document.getElementById('addCarBtn').addEventListener('click', () => this.addCarrier());
-
-        document.getElementById('saveSettings').addEventListener('click', () => this.saveConfig());
-        document.getElementById('resetSettings').addEventListener('click', () => this.resetConfig());
-
-        document.addEventListener('keydown', e => {
-            if (e.key === '/' && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) {
-                e.preventDefault();
-                document.getElementById('bookDate').focus();
-            }
-        });
-    },
-
-    shiftDay(delta) {
-        const d = new Date(this.state.activeDate + 'T00:00:00');
-        d.setDate(d.getDate() + delta);
-        this.state.activeDate = d.toISOString().slice(0,10);
-        document.getElementById('bookDate').value = this.state.activeDate;
-        this.loadSchedule();
-    },
-
-    localIsoForHour(dateStr, hour) {
-        const d = new Date(`${dateStr}T${String(hour).padStart(2,'0')}:00:00`);
-        return d.toISOString();
-    },
-    formatHour(h) {
-        const hr = ((h + 11) % 12) + 1;
-        const ampm = h < 12 || h === 24 ? 'AM' : 'PM';
-        return (h === 0 || h === 24) ? '12 AM' : h === 12 ? '12 PM' : `${hr} ${ampm}`;
-    },
-    esc(str) {
-        if (str == null) return '';
-        return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    },
-    toast(msg, type = 'info') {
-        const el = document.getElementById('toast');
-        el.textContent = msg;
-        el.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-lg shadow-2xl font-semibold text-sm toast-in ' +
-            (type === 'success' ? 'bg-ob-600 text-white' : type === 'error' ? 'bg-red-600 text-white' : 'bg-slate-700 text-white');
-        el.classList.remove('hidden');
-        clearTimeout(this._toastT);
-        this._toastT = setTimeout(() => el.classList.add('hidden'), 2800);
-    },
-};
-
-document.addEventListener('DOMContentLoaded', () => App.init());
-</script>
-</body>
-</html>
+-- ════════════════════════════════════════════════════════════════════
+-- DALMEX SCHEDULER — V3.0 Migration
+-- Adds: Customers table, schedule.customer_id, initial 217 customer import
+-- Safe to re-run (idempotent).
+-- V3.1 (trailer swaps + inventory) will come in a separate migration.
+-- ════════════════════════════════════════════════════════════════════
+
+-- ── 1. CUSTOMERS TABLE ──────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.customers (
+    id                   BIGSERIAL PRIMARY KEY,
+    name                 TEXT NOT NULL,
+    company              TEXT,
+    display_name         TEXT,
+    full_qb_name         TEXT,
+
+    -- Relationship flags
+    delivers_pallets     BOOLEAN NOT NULL DEFAULT false,
+    picks_up_occ         BOOLEAN NOT NULL DEFAULT false,
+    trailer_swap         BOOLEAN NOT NULL DEFAULT false,
+
+    -- Billing address (from QuickBooks)
+    billing_address      TEXT,
+    billing_city         TEXT,
+    billing_state        TEXT,
+    billing_zip          TEXT,
+    billing_country      TEXT,
+
+    -- Shipping address (driver uses this when populated)
+    shipping_address     TEXT,
+    shipping_city        TEXT,
+    shipping_state       TEXT,
+    shipping_zip         TEXT,
+    shipping_country     TEXT,
+
+    -- Contact
+    contact_name         TEXT,
+    phone                TEXT,
+    email                TEXT,
+
+    -- Driver-facing intel
+    gate_hours           TEXT,
+    special_instructions TEXT,
+    preferred_day        TEXT,
+    requires_appointment BOOLEAN NOT NULL DEFAULT false,
+    appointment_contact  TEXT,
+
+    -- Meta from QuickBooks
+    customer_type        TEXT,
+    ein                  TEXT,
+
+    -- Internal
+    notes                TEXT,
+    active               BOOLEAN NOT NULL DEFAULT true,
+    sort_order           INTEGER NOT NULL DEFAULT 500,
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_customers_name           ON public.customers(name);
+CREATE INDEX IF NOT EXISTS idx_customers_active         ON public.customers(active);
+CREATE INDEX IF NOT EXISTS idx_customers_delivers      ON public.customers(delivers_pallets) WHERE delivers_pallets = true;
+CREATE INDEX IF NOT EXISTS idx_customers_picks         ON public.customers(picks_up_occ) WHERE picks_up_occ = true;
+CREATE INDEX IF NOT EXISTS idx_customers_swap          ON public.customers(trailer_swap) WHERE trailer_swap = true;
+
+-- Updated-at trigger
+CREATE OR REPLACE FUNCTION public.touch_customers_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN NEW.updated_at = NOW(); RETURN NEW; END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_customers_updated_at ON public.customers;
+CREATE TRIGGER trg_customers_updated_at
+    BEFORE UPDATE ON public.customers
+    FOR EACH ROW EXECUTE FUNCTION public.touch_customers_updated_at();
+
+-- ── 2. SCHEDULE TABLE: ADD customer_id + route_sequence ─────────────
+ALTER TABLE public.schedule ADD COLUMN IF NOT EXISTS customer_id    BIGINT REFERENCES public.customers(id) ON DELETE SET NULL;
+ALTER TABLE public.schedule ADD COLUMN IF NOT EXISTS route_sequence INTEGER;
+
+CREATE INDEX IF NOT EXISTS idx_schedule_customer_id ON public.schedule(customer_id);
+
+-- ── 3. RLS POLICIES ────────────────────────────────────────────────
+ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "anon_all_customers" ON public.customers;
+CREATE POLICY "anon_all_customers" ON public.customers FOR ALL TO anon USING (true) WITH CHECK (true);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.customers TO anon;
+GRANT USAGE, SELECT ON SEQUENCE public.customers_id_seq TO anon;
+
+-- ── 4. SEED 217 CUSTOMERS FROM QUICKBOOKS (ON CONFLICT safe) ────────
+-- Uniqueness based on name+company combo prevents duplicates on re-run
+CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_import_key
+    ON public.customers (name, COALESCE(company, ''));
+
+INSERT INTO public.customers (
+    name, company, display_name, full_qb_name,
+    delivers_pallets, picks_up_occ, trailer_swap,
+    billing_address, billing_city, billing_state, billing_zip, billing_country,
+    phone, email, customer_type, ein
+) VALUES
+    ('Graybar', NULL, 'Graybar', 'Graybar', false, false, false, '2700 Regent Blvd Ste. 300', 'Dallas', 'TX', '75261', NULL, NULL, 'Supplierinvoice@graybar.com', NULL, NULL),
+    ('Aqua Blend', 'Aqua Blend', 'Aqua Blend', 'Aqua Blend', false, false, false, '1255 Viceroy Rd', 'Dallas', 'TX', '75247', NULL, '214-943-4605', 'clockhart@myinstantpower.com', NULL, NULL),
+    ('American Fiber Services', 'American Fiber Services', 'American Fiber Services', 'American Fiber Services', false, false, false, '2400 Lake Park Drive', 'Smyrna', 'Georgia', '30080', 'United States', '(770) 790-4000', 'accounting@amfiberservices.com', NULL, NULL),
+    ('Box Tech', 'Box Tech', 'Box Tech', 'Box Tech', false, false, false, '301 International Parkway · Building 3 · Suite 2-440', 'Flower Mound', 'Tx', '75022', NULL, '(225) 236-2604', 'BTinvoices@boxtech.com', NULL, NULL),
+    ('PolyAir', 'PolyAir', 'PolyAir', 'PolyAir', true, false, false, '330 Humberline Drive', 'Toronto', 'Ontario', NULL, 'Canada', '(416) 679-6600', 'APPolyair@itape.com', 'Pallet', NULL),
+    ('Ranger Waste Management LLC', 'Ranger Waste Management LLC', 'Ranger Waste Management LLC', 'Ranger Waste Management LLC', false, true, false, '1212 S Riverfront Blvd Ste 150', 'Dallas', 'TX', '75207-4703', 'USA', NULL, 'derek@rangerwaste.com', 'Recycling', NULL),
+    ('Skyward Transportation', 'Skyward Transportation', 'Skyward Transportation', 'Skyward Transportation', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, 'curtis.lawrence@skywardtransportation.com', NULL, NULL),
+    ('CMC Recycling', 'American Iron and Metals', 'CMC Recycling', 'CMC Recycling', false, false, false, '2215S.Good Latimer Expressway', 'Dallas, Texas.75226', NULL, NULL, NULL, '214-428-2861', NULL, NULL, NULL),
+    ('MET International', NULL, 'MET International', 'MET International', true, false, false, '1900 Surveyor Blvd.', 'Carrollton', 'TX', '75006', NULL, NULL, 'Michelle@metint.com', 'Pallet', NULL),
+    ('Ranger Waste Management LLC:Ranger Waste', 'Ranger Waste', 'Ranger Waste', 'Ranger Waste Management LLC:Ranger Waste', false, false, false, '1212 S Riverfront Blvd Ste 150', 'Dallas', 'TX', '75207-4703', 'USA', NULL, 'derek@rangerwaste.com', NULL, NULL),
+    ('B&B Graphic Finishing Services, Inc..', NULL, 'B&B Graphic Finishing Services, Inc..', 'B&B Graphic Finishing Services, Inc..', false, false, false, '8930 Governors Row', 'Dallas', 'TX', '75247', NULL, NULL, 'mchavira@bbgraphicfinishing.com', NULL, NULL),
+    ('CSI/Smurfitt Kappa', 'Smurfitt Kappa', 'CSI/Smurfitt Kappa', 'CSI/Smurfitt Kappa', false, false, false, NULL, NULL, NULL, NULL, NULL, '(972) 613-6771', 'fibershipping.mtx1@smurfitkappa.com', NULL, NULL),
+    ('Sonoco.', 'Sonoco Waste Team', 'Sonoco.', 'Sonoco.', false, false, false, '4011 Westchase Blvd. · Suite 200', 'Raleigh', 'NC', '27607', NULL, NULL, 'wasteandrecyclinginvoices@sonoco.com', NULL, NULL),
+    ('Guardian Packaging Industries, LP', NULL, 'Guardian Packaging Industries, LP', 'Guardian Packaging Industries, LP', false, false, false, '3615 Security St, Garland, Tx 75042', NULL, NULL, NULL, NULL, '(214) 349-1500', 'srodriguez@guardianpackaging.com', NULL, NULL),
+    ('Ole Mexican Foods', 'Ole Mexican Foods', 'Ole Mexican Foods', 'Ole Mexican Foods', false, false, false, '2900 Red Hawk Dr.', 'Grand Prairie', 'Texas', '75052', NULL, NULL, NULL, NULL, NULL),
+    ('Liberty Demolition', 'Liberty Demolition', 'Liberty Demolition', 'Liberty Demolition', false, false, false, '6000 Valley View Ln.', 'Irving', 'Texas', '75038', NULL, '(469) 360-9929', 'adriana@liberty-demolition.com', NULL, NULL),
+    ('Austin Hose', 'Austin Hose', 'Austin Hose', 'Austin Hose', false, false, false, '644 W Mockingbird Ln', 'Dallas', 'Tx', '75246', NULL, NULL, 'ashley.valenzuela@austinhose.com', NULL, NULL),
+    ('Pallet Alliance', 'Pallet Alliance', 'Pallet Alliance', 'Pallet Alliance', true, false, false, '318 Blackwell St · Suite 260', 'Durham', 'North Carolina', '27701', NULL, '(919) 442-1400', 'Invoicing@tpai.com', 'Pallet', NULL),
+    ('Momentum Metals and Recycling', 'Momentum Metals and Recycling', 'Momentum Metals and Recycling', 'Momentum Metals and Recycling', false, false, false, '4300 FM1187', 'Burleson', 'TX', '76028', NULL, '(817) 551-0896', NULL, NULL, NULL),
+    ('E-Source Miller', 'E-Source Miller', 'E-Source Miller', 'E-Source Miller', false, false, false, '3680 W Royal Ln., Ste. 155', 'Irving', 'Texas', '75036', 'United States', NULL, 'scott@esource.com', NULL, NULL),
+    ('The Packaging Wholesalers-#6960-10', 'The Packaging Wholesalers', 'The Packaging Wholesalers-#6960-10', 'The Packaging Wholesalers-#6960-10', false, false, false, 'The Packaging Wholesalers #6960-10
+ · 4040 Pipestone Rd', 'Dallas', 'TX', '75212', NULL, NULL, 'AccountsPayable@packagingWholesalers.com', NULL, NULL),
+    ('1000 Bulbs', '1000 Bulbs', '1000 Bulbs', '1000 Bulbs', false, false, false, '1475 Republic Parkway · Texas', 'Mesquite', 'TX', '75150', NULL, NULL, 'accountspayable@1000bulbs.com', NULL, NULL),
+    ('158 Ministy', '158 Ministy', '158 Ministy', '158 Ministy', false, false, false, '3108 Valley View', 'Farmers Branch', 'TX', '75234', NULL, NULL, NULL, NULL, NULL),
+    ('4 Over Printing', '4 Over Printing', '4 Over Printing', '4 Over Printing', false, false, false, '2112 W Division St', 'Arlington', 'Texas', '76012', NULL, '(747) 228-4341', 'gerlieh@4over.com', NULL, NULL),
+    ('A - OK Pallet  Inc', 'A - OK Pallet  Inc', 'A - OK Pallet  Inc', 'A - OK Pallet  Inc', false, false, false, NULL, 'A -', 'OK', NULL, NULL, '214-212-9412', NULL, NULL, NULL),
+    ('A Grade Pallets', 'A Grade Pallets', 'A Grade Pallets', 'A Grade Pallets', false, false, false, '1738 Empire Central', 'Dallas', 'Texas', '75235', 'United States', NULL, 'agradepalletcompany@gmail.com', NULL, NULL),
+    ('Acrylic Source', NULL, 'Acrylic Source', 'Acrylic Source', false, false, false, '401 Exchange Drive', 'Arlington', 'TX', '76022', NULL, NULL, 'nancy@acrylicsource.com', NULL, NULL),
+    ('All-State Industries, Inc.', 'All-State Industries, Inc.', 'All-State Industries, Inc.', 'All-State Industries, Inc.', false, false, false, '500 South 18th Street', 'West Des Moines', 'IA', '50265-5532', NULL, NULL, 'accounts.payable@all-stateind.com', NULL, NULL),
+    ('Allied Gaming North America', 'Allied Gaming North America', 'Allied Gaming North America', 'Allied Gaming North America', false, false, false, '8311 Eastpoint Drive
+ · STE 400', 'Dallas', 'TX', '75227', NULL, '757-817-9808', 'kane@alliedgaming.com', NULL, NULL),
+    ('AlvarezPallet LLC', 'Alvarez Pallets', 'AlvarezPallet LLC', 'AlvarezPallet LLC', false, false, false, '121 La Paz St', 'Dallas', 'TX', '75217', NULL, NULL, NULL, NULL, NULL),
+    ('American Solutions for Business', NULL, 'American Solutions for Business', 'American Solutions for Business', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, 'tabitha@americansfb.com', NULL, NULL),
+    ('Amerisource Container', 'Amerisource Container', 'Amerisource Container', 'Amerisource Container', false, false, false, 'PO Box 2088', 'Addison', 'TX', '75001', NULL, NULL, 'ap@myamerisource.com', NULL, NULL),
+    ('Amerisource Container - Trade Ctr', 'Amerisource Container - Trade Ctr', 'Amerisource Container - Trade Ctr', 'Amerisource Container - Trade Ctr', false, true, false, '2828 Trade Center Dr', 'Carrollton', 'TX', NULL, NULL, NULL, 'saulhernandez@amerisource.com', 'Recycling', NULL),
+    ('Amerisource Container - Trade Ctr:Amerisource - SMS Lewisville', 'Amerisource - SMS Lewisville', 'Amerisource - SMS Lewisville', 'Amerisource Container - Trade Ctr:Amerisource - SMS Lewisville', false, true, false, '2828 Trade Center Dr', 'Carrollton', 'TX', NULL, NULL, NULL, 'saulhernandez@amerisource.com', 'Recycling', NULL),
+    ('Amerisource Container - Trade Ctr:Amerisource Container - SMS Grapevine', 'Amerisource Container - SMS Grapevine', 'Amerisource Container - SMS Grapevine', 'Amerisource Container - Trade Ctr:Amerisource Container - SMS Grapevine', false, false, false, '2828 Trade Center Dr', 'Carrollton', 'TX', NULL, NULL, NULL, 'saulhernandez@amerisource.comm', NULL, NULL),
+    ('ames Printing', 'Ames printing', 'ames Printing', 'ames Printing', false, false, false, 'Ames Printing Co.
+ · 1632 N. Market Center Blvd.
+ · TX.', 'Dallas', 'TX', '75207', NULL, NULL, NULL, NULL, NULL),
+    ('AP&J Recycling', NULL, 'AP&J Recycling', 'AP&J Recycling', false, false, false, '401 N. Carroll Ave. #180', 'Southlake', 'TX', '76092', NULL, NULL, 'jeanette@apjrecycling.com', NULL, NULL),
+    ('Asia Plastic''s', 'Asia Plastic', 'Asia Plastic''s', 'Asia Plastic''s', false, false, false, '1512 Astoria Dr.', 'Allen', 'TX', '75013', NULL, '469-774-3292', 'dan.leung@att.net', NULL, NULL),
+    ('Atlantic Paper', NULL, 'Atlantic Paper', 'Atlantic Paper', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, 'jccansaveu@hotmail.com', NULL, NULL),
+    ('Avangard', 'Avangard', 'Avangard', 'Avangard', false, false, false, '11906 Brittmoore Park Dr.', 'Houston', 'TX', '77041', NULL, NULL, 'dphan@avaicg.com', NULL, NULL),
+    ('B&B Materials and Services, LLC', 'B&B Materials and Services, LLC', 'B&B Materials and Services, LLC', 'B&B Materials and Services, LLC', false, true, false, 'PO Box 1313', 'Prosper', 'TX', '75078', NULL, '(214) 803-3184', 'Amy@bbwaste.com', 'Recycling', '202168731.0'),
+    ('Balcones Recycling', 'Balcones Recycling', 'Balcones Recycling', 'Balcones Recycling', false, false, false, '13921 Senlac Drive, Suite 200
+ · TX.', 'Farmers Branch', 'TX', '75234', NULL, '972-481-1400', 'lisa@balconesresources.com', NULL, NULL),
+    ('Bankem Printing', NULL, 'Bankem Printing', 'Bankem Printing', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('Bee Organized Dallas', NULL, 'Bee Organized Dallas', 'Bee Organized Dallas', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('BellINVITO Stationers', 'BellINVITO Stationers', 'BellINVITO Stationers', 'BellINVITO Stationers', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, 'accounting@bellinvito.com', NULL, NULL),
+    ('Best Choice Boxes', NULL, 'Best Choice Boxes', 'Best Choice Boxes', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('Best Gaylord Boxes', 'Best Gaylord Boxes', 'Best Gaylord Boxes', 'Best Gaylord Boxes', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('BFS.', 'BFS', 'BFS.', 'BFS.', false, false, false, '500 Airline Drive, Suite 40', 'Coppell', 'TX', '75019', NULL, NULL, 'BKarki@bfsservices.com', NULL, NULL),
+    ('Big Horn Iron Doors', 'Big Horn Iron Doors', 'Big Horn Iron Doors', 'Big Horn Iron Doors', false, false, false, '11676 Tuxford St. Unit 1', 'Sun Valley', 'CA', '91352', NULL, '(469) 795-0833', 'Veronica@bighorndoors.com', NULL, NULL),
+    ('Bionew USA Central Corp.', 'Bionew USA Central Corp.', 'Bionew USA Central Corp.', 'Bionew USA Central Corp.', false, false, false, '2525 S Shiloh Rd., Suite 150', 'Garland', 'TX', '75041', NULL, NULL, 'sonia@bionewusa.com', NULL, NULL),
+    ('BlueLine/Rediform', 'BlueLine/Rediform', 'BlueLine/Rediform', 'BlueLine/Rediform', false, false, false, 'AP · 1441 S. Beltline Rd. STE 200', 'Coppell', 'TX', '75019', NULL, NULL, 'maria.escogido@rediform.com', NULL, NULL),
+    ('Body Boxes R Us/Best Price Caskets', 'Body Boxes R Us', 'Body Boxes R Us/Best Price Caskets', 'Body Boxes R Us/Best Price Caskets', false, false, false, 'Best Price Caskets
+ · 13401 Denton Dr.', 'Farmers Branch', 'TX', '75235', NULL, NULL, 'zimmertbz@aol.com', NULL, NULL),
+    ('Bottom Line Recycling_', 'Bottom Line Recycling', 'Bottom Line Recycling_', 'Bottom Line Recycling_', false, false, false, '323 Glen Hollow', 'Keller', 'TX', '76248', NULL, NULL, 'mikeschwinn@verizon.net', NULL, NULL),
+    ('Bubba Tugs Corp', NULL, 'Bubba Tugs Corp', 'Bubba Tugs Corp', false, false, false, '4340 N. Central Expressway', 'Dallas', 'TX', '75206', NULL, NULL, 'chris@dalmexrecycling.com', NULL, NULL),
+    ('C.R. Laurence', 'C.R. Laurence', 'C.R. Laurence', 'C.R. Laurence', false, false, false, '2080 Lone Star Dr.
+ · TX.', 'Dallas', 'TX', '75212', NULL, '214/634-7305', NULL, NULL, NULL),
+    ('Cake Craft Factory, LLC', 'Kia', 'Cake Craft Factory, LLC', 'Cake Craft Factory, LLC', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, 'kia@cakecraftusa.com', NULL, NULL),
+    ('Canon USA.', NULL, 'Canon USA.', 'Canon USA.', false, false, false, '3200 Regent Blvd.', 'Irving', 'TX', '75063', NULL, NULL, 'bfout@cusa.canon.com,mdiegel@cusa.canon.com', NULL, NULL),
+    ('Canusa Hershman', 'Canusa Hershman', 'Canusa Hershman', 'Canusa Hershman', false, true, false, '45 Northeast Industrial Rd', 'Branford', 'CT', '06405', 'US', NULL, 'ksquires@canusahershman.com', 'Recycling', NULL),
+    ('Carolina Recycling', NULL, 'Carolina Recycling', 'Carolina Recycling', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, 'dave@crc-recycling.com', NULL, NULL),
+    ('Central Logistics', 'Central Logistics', 'Central Logistics', 'Central Logistics', false, false, false, '3113 Glenfield', 'Dallas', 'Texas', '75233', 'United States', NULL, 'ivys@cliusa.us', NULL, NULL),
+    ('Cenwood Telecom', 'Cenwood Telecom', 'Cenwood Telecom', 'Cenwood Telecom', false, false, false, '1825 Monetary Lane
+ · Paul Berger', 'Carrollton', 'TX', '75006', NULL, '469 465-5657', 'paulberger@cenwoodlelecom.com', NULL, NULL),
+    ('CHEP', 'CHEP', 'CHEP', 'CHEP', true, false, false, '8517 South Park Circle', 'Orlando', 'Florida', '32819', 'US', '(214) 597-1581', 'matthew.aguirre@chep.com', 'Pallet', NULL),
+    ('Clarion Technologies Inc.', 'Clarion Technologies Inc.', 'Clarion Technologies Inc.', 'Clarion Technologies Inc.', false, false, false, '238 South River FL 2', 'Holland', 'MI', '49423', NULL, NULL, 'clarionAP@clariontechnologies.com', NULL, NULL),
+    ('CMX', 'CMX', 'CMX', 'CMX', false, false, false, '320 W Centre Park Blvd.', 'Desota', 'Texas', '75115', 'United States', NULL, 'jeanie@cmxgaming.com', NULL, NULL),
+    ('Conex Recycling Corporation', NULL, 'Conex Recycling Corporation', 'Conex Recycling Corporation', false, false, false, '1370 Union Hill Industrial Ct Alpharetta · Suite A', 'Alpharetta', 'GA', '30004', NULL, NULL, 'derek@conexrecycling.com, lucy@conexrecycling.com, jason@conexrecycling.com', NULL, NULL),
+    ('Continental Paper Grading', 'Continental Paper Grading', 'Continental Paper Grading', 'Continental Paper Grading', false, false, false, '1623 South Lumber Street', 'Chicago', 'IL', '60616', NULL, NULL, 'mtapia@cpgco.com', NULL, NULL),
+    ('Continental Recycling Corp.', 'Continental Recycling Corp.', 'Continental Recycling Corp.', 'Continental Recycling Corp.', false, false, false, '4318 S. Buffalo Street', 'Orchard Park', 'NY', '14127', NULL, NULL, NULL, NULL, NULL),
+    ('Corporate Communications Center', 'Corporate Communications Center', 'Corporate Communications Center', 'Corporate Communications Center', false, false, false, '4030 Harry Hines Blvd.', 'Dallas', 'TX', '75219', NULL, '214-871-2941', NULL, NULL, NULL),
+    ('Corporate Visual Communications', 'Corporate Visual Communications', 'Corporate Visual Communications', 'Corporate Visual Communications', false, false, false, '9011 John W Carpenter FWY
+ · STE 200', 'Dallas', 'TX', '75247', NULL, '214 206-3763', 'pherrera@corporatevisual.net', NULL, NULL),
+    ('Cosmo Gift Corp.', 'Cosmo Gift Corp.', 'Cosmo Gift Corp.', 'Cosmo Gift Corp.', false, false, false, '4425 McEwen', 'Farmers Branch', 'TX', '75244', NULL, '972-458-7266', 'mei@cosmosgifts.com', NULL, NULL),
+    ('CSI/Smurfitt Kappa- Arlington', 'Smurfitt Kappa Group', 'CSI/Smurfitt Kappa- Arlington', 'CSI/Smurfitt Kappa- Arlington', false, false, false, '2902 E. Randol Mill Rd. · TX.', 'Arlington', 'TX', '76011', NULL, '817-640-3111', 'cassiopeia.matthews@smurfitkappa.com', NULL, NULL),
+    ('Custard Core Supply', 'Custard Core Supply', 'Custard Core Supply', 'Custard Core Supply', false, false, false, '3015 Hansboro Ave', 'Dallas', 'TX', '75233', NULL, NULL, NULL, NULL, NULL),
+    ('Customers that don''t buy often', NULL, 'Customers that don''t buy often', 'Customers that don''t buy often', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('Cyclone Recycling', 'Cyclone Recycling', 'Cyclone Recycling', 'Cyclone Recycling', false, false, false, '11221 Tantor Rd.', 'Dallas', NULL, '75229', NULL, NULL, NULL, NULL, NULL),
+    ('Dal-Har_', NULL, 'Dal-Har_', 'Dal-Har_', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('Dallas Paper Comp.', 'Dallas Paper Company', 'Dallas Paper Comp.', 'Dallas Paper Comp.', false, false, false, '13561 Denton Drive
+ · Tx', 'Farmers Branch', 'TX', '75234', NULL, NULL, 'j.merigold@dallaspaper.net', NULL, NULL),
+    ('Dallas Recycling co.', 'dallas recycling', 'Dallas Recycling co.', 'Dallas Recycling co.', false, false, false, 'Recycling
+ · 3303 Pluto St.
+ · Dallas, TX.', 'Dallas', 'TX', '75212', NULL, NULL, 'jillmccagg@sbcglobal.net', NULL, NULL),
+    ('Dart', NULL, 'Dart', 'Dart', false, false, false, 'GE/Dart', 'Grand Prairie', 'TX', '75050', NULL, NULL, 'kevin.gossett@ge.com', NULL, NULL),
+    ('DGS Waste & Recycling LLC', 'DGS Waste & Recycling LLC', 'DGS Waste & Recycling LLC', 'DGS Waste & Recycling LLC', false, false, false, '129 N Laurel Springs Dr', 'DeSoto', 'TX', '75115', NULL, NULL, NULL, NULL, NULL),
+    ('DGS Waste & Recycling LLC -', 'DGS Waste & Recycling LLC -', 'DGS Waste & Recycling LLC -', 'DGS Waste & Recycling LLC -', false, false, false, '129 N Laurel Springs Dr', 'Desoto', 'TX', '75115', NULL, NULL, NULL, NULL, NULL),
+    ('DMS Printing & Design', NULL, 'DMS Printing & Design', 'DMS Printing & Design', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('Domingo_', 'Domingo', 'Domingo_', 'Domingo_', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('Drybev', 'Drybev', 'Drybev', 'Drybev', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, 'Invoices@drybev.com', NULL, NULL),
+    ('Eagle Stone Supply', 'Eagle Stone Supply', 'Eagle Stone Supply', 'Eagle Stone Supply', false, false, false, 'PO Box 5930', 'Granbury', 'TX', '76049', NULL, NULL, 'office@eaglestonesupply.com', NULL, NULL),
+    ('EAL Mfg.', 'Erect-A-Line, Inc.', 'EAL Mfg.', 'EAL Mfg.', false, false, false, 'P.O. Box 541087', 'Dallas', 'TX', '75354-1087', NULL, NULL, 'ap-dept@ealmfg.com', NULL, NULL),
+    ('Eclipse Fitness, LLC', NULL, 'Eclipse Fitness, LLC', 'Eclipse Fitness, LLC', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('Ecycle', NULL, 'Ecycle', 'Ecycle', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, 'nigel@ecycleitltd.com', NULL, NULL),
+    ('Ed Houshian', 'Calzone Packaging', 'Ed Houshian', 'Ed Houshian', false, false, false, '1701 Kelly Blvd', 'Carrolton', 'Tx', '75006', NULL, NULL, 'ed@calzonepackaging.com', NULL, NULL),
+    ('Erik Dominguez', 'DMPM Trucking', 'Erik Dominguez', 'Erik Dominguez', false, false, false, 'P.O. Box 224412', 'Dallas', 'TX', '75222', NULL, NULL, NULL, NULL, NULL),
+    ('ESI Masonry Supply Inc.', 'ESI Masonry Supply Inc.', 'ESI Masonry Supply Inc.', 'ESI Masonry Supply Inc.', false, false, false, '2555 N. IH-35', 'Georgetown', 'TX', '78628', NULL, NULL, NULL, NULL, NULL),
+    ('Everun Co', 'Everun Company Inc', 'Everun Co', 'Everun Co', false, false, false, '4200 Chino Hills Parkway
+ · STE 135-300', 'Chino Hill', 'CA', '91709', NULL, '1 (347) 556-9319', 'hunter@everuncompany.com', NULL, NULL),
+    ('ExportTek', 'ExportTek', 'ExportTek', 'ExportTek', false, false, false, '410 Freeport Parkway #100', 'Coppell', 'TX', '75019', NULL, NULL, 'chris@dalmexrecycling.com', NULL, NULL),
+    ('FLR', 'FLR', 'FLR', 'FLR', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, 'flrcoreandtube@gmail.com', NULL, NULL),
+    ('FPS Marketing Group LLC', NULL, 'FPS Marketing Group LLC', 'FPS Marketing Group LLC', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('Fred', NULL, 'Fred', 'Fred', false, false, false, NULL, NULL, NULL, NULL, NULL, '(704) 918-6522', 'info@alliance-integrated.com', NULL, NULL),
+    ('Fricks Pallet Company, LLC', 'Fricks Pallet Company, LLC', 'Fricks Pallet Company, LLC', 'Fricks Pallet Company, LLC', false, false, false, '101 Goforth Rd.', 'Ft. Worth', 'Texas', '76126', 'United States', '(817) 551-5607', NULL, NULL, NULL),
+    ('Fuji Merchanandise Corp', 'Fuji Merchanandise Corp', 'Fuji Merchanandise Corp', 'Fuji Merchanandise Corp', false, false, false, '20 Prestige Circle', 'Allen', 'TX', '75002', NULL, NULL, NULL, NULL, NULL),
+    ('Future Foam', 'Future Foam', 'Future Foam', 'Future Foam', false, false, false, '10726 Doric St.
+ · Texas 
+ · usa', 'Dallas', 'TX', '75220', 'USA', NULL, 'jcarter@futurefoam.com', NULL, NULL),
+    ('Future Foam #19', 'Future Foam 19', 'Future Foam #19', 'Future Foam #19', false, false, false, 'Future Foam
+ · 8611 Ambassador Row #A', 'Dallas', 'TX', '75247', NULL, NULL, 'rfoerster@futurefoam.com', NULL, NULL),
+    ('G C & S Company', 'G C & S Company', 'G C & S Company', 'G C & S Company', false, false, false, '1200 S. Fretz Ave.', 'Edmond', 'OK', '73003', NULL, '405-216-9258', NULL, NULL, NULL),
+    ('GCA Products Inc.', NULL, 'GCA Products Inc.', 'GCA Products Inc.', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, 'mrodriguez@gcaproducts.com', NULL, NULL),
+    ('GP Harmon Recycling, LLC', 'GP Harmon Recycling, LLC', 'GP Harmon Recycling, LLC', 'GP Harmon Recycling, LLC', false, false, false, '2010 Main Street Ste. 650', 'Irvine', 'CA', '92614', NULL, NULL, 'HarBkpExport@gapac.com', NULL, NULL),
+    ('Graybar/Fort Worth', 'Graybar', 'Graybar/Fort Worth', 'Graybar/Fort Worth', false, false, false, '4601 Cambridge Rd.', 'Fort Worth', 'TX', '76155', NULL, '(817) 213-1361', 'laura.bell@graybar.com', NULL, NULL),
+    ('Greek X Technology Inc.', NULL, 'Greek X Technology Inc.', 'Greek X Technology Inc.', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('Greenpath', 'Greenpath Recovery', 'Greenpath', 'Greenpath', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, 'accounting@greenpathrecovery.com', NULL, NULL),
+    ('Greenside Recycling', 'Greenside Recycling', 'Greenside Recycling', 'Greenside Recycling', false, false, false, '14403 Export Road', 'Laredo', 'TX', '78045', NULL, '(830) 929-9503', 'manuelegarciagarza@gmail.com', NULL, NULL),
+    ('Haines, Jones & Cadbury', 'Haines, Jones & Cadbury', 'Haines, Jones & Cadbury', 'Haines, Jones & Cadbury', false, false, false, '3102 Miller Park WEST · Suite 800', 'Garland', 'TX', '75042', NULL, NULL, 'steve.page@hjcinc.com', NULL, NULL),
+    ('Heubach Corporation', NULL, 'Heubach Corporation', 'Heubach Corporation', false, false, false, '2713 Industrial Ln', 'Garland', 'Tx', '75041', NULL, '(214) 543-4015', 'matt@heubachcorp.com', NULL, NULL),
+    ('Hollander Sleep Products LLC', 'Hollander Sleep Products LLC', 'Hollander Sleep Products LLC', 'Hollander Sleep Products LLC', false, false, false, '901 Yamato Rd. STE 250', 'Boca Raton', 'FL', '33487', NULL, '469-732-0843', 'APhelpdesk@hollander.com', NULL, NULL),
+    ('Hutmel Investment Two', NULL, 'Hutmel Investment Two', 'Hutmel Investment Two', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('Imperial Products Supply LLC.', NULL, 'Imperial Products Supply LLC.', 'Imperial Products Supply LLC.', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('Infinity Restoration and Const.', 'Infinitiy Restoration and Construction', 'Infinity Restoration and Const.', 'Infinity Restoration and Const.', false, false, false, 'InfinityRestoration and Const.
+ · 3170 Irving Blvd.', 'Dallas', 'TX', '75247', NULL, NULL, NULL, NULL, NULL),
+    ('Information Davis Tech, INC', 'Information Davis Tech, INC', 'Information Davis Tech, INC', 'Information Davis Tech, INC', false, false, false, '271 Airport Road.', 'North Aurora', 'IL', '60542', NULL, '469 671-4381', NULL, NULL, NULL),
+    ('Intek', 'Intek', 'Intek', 'Intek', false, false, false, '2901 Technoligy Dr.', 'Plano, TX.75074', NULL, NULL, NULL, '214-680-6275', NULL, NULL, NULL),
+    ('Intercon Paper', 'Intercon Paper', 'Intercon Paper', 'Intercon Paper', false, false, false, '4545 Leston Street', 'Dallas', 'TX', '75247', NULL, NULL, 'tony@interconpaper.com', NULL, NULL),
+    ('International Paper', 'IP', 'International Paper', 'International Paper', false, false, false, '2015 Country Club Dr.', 'Carrollton', 'TX', '75006', NULL, NULL, 'Celia.Sencalar@ipaper.com', NULL, NULL),
+    ('Jacob Abraham', 'Structured Cable Products', 'Jacob Abraham', 'Jacob Abraham', true, false, false, '3665 La Reunion Parkway', 'Dallas', 'TX', '75212', NULL, '(817) 217-6784', 'Jabraham@scpcat5e.com', 'Pallet', NULL),
+    ('Jason Linna_', NULL, 'Jason Linna_', 'Jason Linna_', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('Kenneth Hoffman', 'Structured Cable Products', 'Kenneth Hoffman', 'Kenneth Hoffman', false, false, false, '3665 La Reunion Parkway', 'Dallas', 'Tx', '75212', NULL, NULL, 'JABraham@scpcat5e.com', NULL, NULL),
+    ('L&L Pallets LLC', 'L&L Pallets LLC', 'L&L Pallets LLC', 'L&L Pallets LLC', false, false, false, '4060 Duncanville Rd', 'Dallas', 'TX', '75236', NULL, NULL, NULL, NULL, NULL),
+    ('La Silla', 'La Silla', 'La Silla', 'La Silla', false, false, false, '4670 Mint Way
+ · Texas', 'Dallas', 'TX', '75234', NULL, NULL, 'milly@lasillawholesale.com', NULL, NULL),
+    ('Laser Image_', 'Laser Image', 'Laser Image_', 'Laser Image_', false, false, false, '2451 N. Stemmons Frwy.', 'Dallas', 'TX', '75207', NULL, NULL, NULL, NULL, NULL),
+    ('Liberty Mutual Insurance', NULL, 'Liberty Mutual Insurance', 'Liberty Mutual Insurance', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('Liberty Pallets Service', 'Liberty Pallets Service', 'Liberty Pallets Service', 'Liberty Pallets Service', false, false, false, '3005 Leahy Drive', 'Dallas', 'TX', '75229', NULL, '214 243-7749', NULL, NULL, NULL),
+    ('Linn Paper', NULL, 'Linn Paper', 'Linn Paper', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('Magnetic Ticket and Label', 'Magnetic Ticket and Label', 'Magnetic Ticket and Label', 'Magnetic Ticket and Label', false, false, false, '8719 Diplomacy Row', 'Dallas', 'TX', '75247', NULL, NULL, 'smesseker@magticket.com', NULL, NULL),
+    ('MARCK INDUSTRIES, INC.', 'MARCK INDUSTRIES, INC.', 'MARCK INDUSTRIES, INC.', 'MARCK INDUSTRIES, INC.', false, false, false, '715 Main Street', 'Cassville', 'MO', '65625', 'US', '(417) 847-5900', 'kim@marck.net', NULL, NULL),
+    ('Maria', 'Chestnut Micro', 'Maria', 'Maria', false, false, false, '2720 Royal Lane · Ste. 200', 'Dallas', 'Texas', '75229', NULL, '(469) 223-0059', 'maria@chestnutmicro.com', NULL, NULL),
+    ('Mc Coy Paper Company', 'Mc Coy Paper Company', 'Mc Coy Paper Company', 'Mc Coy Paper Company', false, false, false, '1180 Trend', 'Carrollton', 'TX', '75006', NULL, '972-418-2228', 'regina@mccoypaper.com', NULL, NULL),
+    ('McGee', 'McGee Paris', 'McGee', 'McGee', false, false, false, '8504 Chancellor Row', 'Dallas', 'TX', '75247', NULL, NULL, 'atrater@mcgeeparis.com', NULL, NULL),
+    ('Met International #2 Irving', 'Met International #2 Irving', 'Met International #2 Irving', 'Met International #2 Irving', false, false, false, '3131 W. Royal Lane   STE 100', 'Irving', 'TX', '75063', NULL, NULL, NULL, NULL, NULL),
+    ('mobile Santa', 'mobile Santa', 'mobile Santa', 'mobile Santa', false, false, false, 'po box 1303', 'rockwall', 'TX', '75052', NULL, '(214) 507-8899', 'robert@mobilesantatx.com', NULL, NULL),
+    ('Montana West', 'Montana West', 'Montana West', 'Montana West', false, false, false, '2606 Brenner', 'Dallas', 'TX', '75220', NULL, NULL, 'montanawest.kwang@gmail.com', NULL, NULL),
+    ('MONTANA WEST INC', 'MONTANA WEST INC', 'MONTANA WEST INC', 'MONTANA WEST INC', false, false, false, '2606 Brenner Dr', 'Dallas', 'TX', '75220', 'USA', '9403123906', 'mwest0728@gmail.com', NULL, NULL),
+    ('Motion', NULL, 'Motion', 'Motion', false, false, false, '6633 Forest Park Rd.', 'Dallas', 'TX', '75235', NULL, '214-357-0909', NULL, NULL, NULL),
+    ('MPI Marketing Inc.', 'MPI Marketing Inc.', 'MPI Marketing Inc.', 'MPI Marketing Inc.', false, false, false, '5728 Gleneagles Dr.', 'Plano', 'TX', '75093-5975', NULL, NULL, NULL, NULL, NULL),
+    ('MPI Wood', 'MPI Wood', 'MPI Wood', 'MPI Wood', false, false, false, '1902 Reverse Street', 'Garland', 'TX', '75042', NULL, '972-403-7801', 'karlysherardmpi@mpiwood.com', NULL, NULL),
+    ('National Fiber Supply Company', 'National Fiber Supply Company', 'National Fiber Supply Company', 'National Fiber Supply Company', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, 'Neil.Rosenblum@NationalFiberSupply.com', NULL, NULL),
+    ('NGX Corporation', NULL, 'NGX Corporation', 'NGX Corporation', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('Northstar Recycling.', NULL, 'Northstar Recycling.', 'Northstar Recycling.', false, false, false, 'P.O. Box 188', 'East Longmeadow', 'MA', '01028', NULL, NULL, 'NorthstarRecycleAP@nsrecycle.com', NULL, NULL),
+    ('NYC Recycling Inc.', 'NYC Recycling Inc.', 'NYC Recycling Inc.', 'NYC Recycling Inc.', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, 'accounting@nycityrecycling.com', NULL, NULL),
+    ('Owens Corning', 'Owens Corning', 'Owens Corning', 'Owens Corning', false, false, false, NULL, 'Irving', 'TX', NULL, NULL, '214-870-5045', 'Rayna.wynne@owenscorning.com', NULL, NULL),
+    ('PABS MGMT, Inc.', NULL, 'PABS MGMT, Inc.', 'PABS MGMT, Inc.', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('Packaging Solutions', 'Packaging Solutions', 'Packaging Solutions', 'Packaging Solutions', false, false, false, '1125 Hayden Drive STE 100', 'Carrollton', 'TX', '75006', NULL, '972 418-8492 x 807', 'ap@onlinepsi.com', NULL, NULL),
+    ('Pal-Serv', 'Pal-Serv', 'Pal-Serv', 'Pal-Serv', false, false, false, 'Pal-Serv of Dallas
+ · 2150 S. Peachtree Rd.', 'Balch Springs', 'TX', '75180', NULL, NULL, 'buddy.burgess@pal-serv.com', NULL, NULL),
+    ('Pan American Wire, Inc.', NULL, 'Pan American Wire, Inc.', 'Pan American Wire, Inc.', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('Papeles Selectos de San Luis', NULL, 'Papeles Selectos de San Luis', 'Papeles Selectos de San Luis', false, false, false, NULL, 'Papeles Selectos', 'DE', NULL, NULL, NULL, 'p.selectos@hotmail.com', NULL, NULL),
+    ('Partners Converting', 'Partners Converting', 'Partners Converting', 'Partners Converting', false, false, false, '1800 Kelly Blvd', 'Carrollton', 'TX', '75006', NULL, NULL, 'vcarter@partnersconverting.com', NULL, NULL),
+    ('Paul Quinn College', NULL, 'Paul Quinn College', 'Paul Quinn College', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, 'accountspayable@pqc.edu', NULL, NULL),
+    ('PCA Garland', NULL, 'PCA Garland', 'PCA Garland', false, false, false, '2510 W Miller Rd. Garland, Tx 75041', NULL, NULL, NULL, NULL, '(972) 840-4238', 'GARAP@packagingcorp.com', NULL, NULL),
+    ('PCA Garland #322', NULL, 'PCA Garland #322', 'PCA Garland #322', false, false, false, '2510 W. Miller Rd Garland, TX 75041', NULL, NULL, NULL, NULL, '(972) 840-4249', 'TerriTipton@packagingcorp.com', NULL, NULL),
+    ('Peacock Alley.', 'Peacock Alley', 'Peacock Alley.', 'Peacock Alley.', false, false, false, '2050 Postal Way', 'Dallas', 'TX', '75212', NULL, NULL, 'jarroyo@PeacockAlley.com', NULL, NULL),
+    ('Penikam Inc', NULL, 'Penikam Inc', 'Penikam Inc', false, false, false, '1811 Trinity Valley Dr.', 'Carrollton', 'TX', '75006', NULL, NULL, NULL, NULL, NULL),
+    ('Penn-Tex Plastics', 'Penn Tex Plastics', 'Penn-Tex Plastics', 'Penn-Tex Plastics', false, false, false, 'P.O. Box 1401
+ · TX.', 'Bedford', 'TX', '76059', NULL, NULL, 'info@penntexplastics.com', NULL, NULL),
+    ('Pioneer Paper Stock', 'Pioneer Paper Stock', 'Pioneer Paper Stock', 'Pioneer Paper Stock', false, false, false, '5000 Singleton Blvd.
+ · TX.', 'Dallas', 'TX', '75212', NULL, '214-630-9881', 'jsartin@pioneerintl.com', NULL, NULL),
+    ('Plastic Rescue.', NULL, 'Plastic Rescue.', 'Plastic Rescue.', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, 'rsjacobs@airmail.net', NULL, NULL),
+    ('Poly-America', 'Poly-America', 'Poly-America', 'Poly-America', false, false, false, 'ATTN: Accounting Dept.
+ · 2000 W. Marshall Dr.', 'Grand Prairie', 'TX', '75051', NULL, '972-337-7042', 'rm@poly-america.com', NULL, NULL),
+    ('Pratt Industries', NULL, 'Pratt Industries', 'Pratt Industries', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, 'schristian@prattindustries.com', NULL, NULL),
+    ('Pro Shred', 'Pro Shred', 'Pro Shred', 'Pro Shred', false, false, false, '2081 Hutton Dr., Suite 103', 'Carrollton', 'TX', '75006', NULL, NULL, 'Angela.Davis@Proshred.com', NULL, NULL),
+    ('Progressive Insurance', 'Progressive Insurance', 'Progressive Insurance', 'Progressive Insurance', false, false, false, 'PO Box 2930', 'Clinton', 'IA', '52733-2930', NULL, NULL, NULL, NULL, NULL),
+    ('Progressive Packaging', 'Progressive Packaging', 'Progressive Packaging', 'Progressive Packaging', false, false, false, '1050 Venture Court
+ · STE 120', 'Dallas', 'TX', '75006', NULL, NULL, 'ap@progressivepak.com', NULL, NULL),
+    ('Pulse Recycling', NULL, 'Pulse Recycling', 'Pulse Recycling', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('Purvis Industries.', NULL, 'Purvis Industries.', 'Purvis Industries.', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, 'suzy.mccorkle@purvisindustries.com', NULL, NULL),
+    ('QDI Stone', 'QDI Stone', 'QDI Stone', 'QDI Stone', false, false, false, '2605 Freewood Dr', 'Dallas', 'TX', '75220', NULL, '214 741-2200', NULL, NULL, NULL),
+    ('RaceTrac Inc.', 'RaceTrac Inc.', 'RaceTrac Inc.', 'RaceTrac Inc.', false, false, false, '3110 Roy Orr Blvd.
+ · STE 100', 'Grand Prairie', 'TX', '75050', NULL, NULL, 'rnielsen@racetrac.com', NULL, NULL),
+    ('Raul Macias>', NULL, 'Raul Macias>', 'Raul Macias>', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('Raz Imports', 'Raz Imports', 'Raz Imports', 'Raz Imports', false, false, false, '1020 Eden Rd', 'Arlington', 'TX', '76001', NULL, '1-800-443-3540', 'plewis@razimports.com', NULL, NULL),
+    ('Rebox Co', 'Rebox Co', 'Rebox Co', 'Rebox Co', false, false, false, '10645 N. Tatum Blvd #200-442', 'Phoenix', 'AZ', '85028', NULL, NULL, 'dan@reboxcointl.com', NULL, NULL),
+    ('Recycle Revolution', 'Recycle Revolution', 'Recycle Revolution', 'Recycle Revolution', false, false, false, '5731 Buffridge Trl.', 'Dallas', 'TX', '75252', NULL, NULL, 'genie@recyclerevolutiondallas.com', NULL, NULL),
+    ('Recycle USA', 'Recycle USA', 'Recycle USA', 'Recycle USA', false, false, false, 'PO Box 584', 'Granbury', 'Texas', '75048', 'United States', '(817) 307-4178', 'customerdesk@recycle-usa.com', NULL, NULL),
+    ('Recycling & Waste Reduction Company', 'Recycling & Waste Reduction Company', 'Recycling & Waste Reduction Company', 'Recycling & Waste Reduction Company', false, false, false, '8001 Boat Club Rd. Suite B', 'Fort Worth', 'TX', '76179', NULL, NULL, NULL, NULL, NULL),
+    ('Recycling Technology', 'Recycling Technology', 'Recycling Technology', 'Recycling Technology', false, false, false, '8101 Tristar Ste. 112', 'Irving', 'TX', '75063', NULL, '214-687-6500', 'kaliaraghu@yahoo.com', NULL, NULL),
+    ('Regency Wraps', 'Regency Wraps', 'Regency Wraps', 'Regency Wraps', false, false, false, '2731 Satsuma Dr.', 'Dallas', NULL, '75229', NULL, '(214) 357-0099', 'mail@regencywraps.com', NULL, NULL),
+    ('Register Mark', NULL, 'Register Mark', 'Register Mark', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, 'mark@registermarkslp.com', NULL, NULL),
+    ('Rehrig Pacific Company', 'Rehrig Pacific Company', 'Rehrig Pacific Company', 'Rehrig Pacific Company', false, false, false, '4010 E. 26th Street', 'Los Angeles', 'CA', '90058', NULL, '214 631-7943', 'apinvoices@rehrig.com', NULL, NULL),
+    ('Robbin’s Resource Management', 'Robbin’s Resource Management', 'Robbin’s Resource Management', 'Robbin’s Resource Management', false, false, false, '100 S. Main Street', 'Monmouth', 'IL', '61462', NULL, '(309) 734-1739', 'Chris@rrmgtonline.com', NULL, NULL),
+    ('Rocky Mtn High Brands', 'Rocky Mtn High Brands', 'Rocky Mtn High Brands', 'Rocky Mtn High Brands', false, false, false, '1000 Shiloh Rd
+ · STE 200', 'Plano', 'TX', '75074', NULL, NULL, 'kathy@rockymountainhighbrands.com', NULL, NULL),
+    ('Rogers & Rogers Inc.', NULL, 'Rogers & Rogers Inc.', 'Rogers & Rogers Inc.', false, false, false, '1013 S. Goliad', 'Rockwall', 'TX', '75087', NULL, NULL, NULL, NULL, NULL),
+    ('Romack Logistics', 'Romack Logistics', 'Romack Logistics', 'Romack Logistics', false, false, false, '2801 N. Houston School Rd.', 'Lancaster', 'Texas', '75134', NULL, NULL, NULL, NULL, NULL),
+    ('RPM', 'RPM', 'RPM', 'RPM', false, false, false, '3170 Irving Blvd', 'Dallas', 'TX', '75347', NULL, '469 - 350-4122', 'alex@infinityrestorationconstruction.com', NULL, NULL),
+    ('Sanfords Recycling', 'Sanfords Recycling', 'Sanfords Recycling', 'Sanfords Recycling', false, false, false, '3144 Darvany Dr.', 'Dallas', 'TX', '75220', NULL, NULL, 'vernonhumphrie924@gmail.com', NULL, NULL),
+    ('Savan Patel', 'Kickstart Logistics', 'Savan Patel', 'Savan Patel', false, false, false, '1901 Knightsbridge Road · #10101', 'Farmer''s Branch', 'Texas', '75234', NULL, '(603) 892-9380', 'kickstartlogistics@gmail.com', NULL, NULL),
+    ('Semo International', 'Semo International', 'Semo International', 'Semo International', false, false, false, '2230 LBJ Fwy
+ · STE 100', 'Dallas', 'TX', '75234', NULL, NULL, 'justin.lee@baylabusa.com', NULL, NULL),
+    ('Ship Addict', 'Ship Addict', 'Ship Addict', 'Ship Addict', false, false, false, '1315 Exchange Dr', 'Richardson', 'TX', '75081', NULL, '972-244-3399', 'ak@shipaddict.com', NULL, NULL),
+    ('Spot-On Services Dallas LLC', NULL, 'Spot-On Services Dallas LLC', 'Spot-On Services Dallas LLC', false, false, false, '410 Hillburn Dr.', 'Dallas', 'TX', '75217', NULL, NULL, 'lindacantu@spot-onservices.com', NULL, NULL),
+    ('Structured Cable Products 1', 'Structured Cable Products 1', 'Structured Cable Products 1', 'Structured Cable Products 1', true, false, false, '6365 NW 6th Way, Suite 320', 'Fort Lauderdale', 'FL', '33309', NULL, '(954) 327-5770', 'jabraham@scpcat5e.com', 'Pallet', NULL),
+    ('Suncoast Post-Tension', NULL, 'Suncoast Post-Tension', 'Suncoast Post-Tension', true, false, false, 'Suncoast Post Tension · 2215 East Pioneer DR Ste D', 'Irving', 'TX', '75061', NULL, NULL, 'brittany.wences@suncoast-pt.com', 'Pallet', NULL),
+    ('Sunshine Paper Corp.', 'Sunshine Paper Corp.', 'Sunshine Paper Corp.', 'Sunshine Paper Corp.', false, false, false, '90 N. Main St.', 'Donna', 'TX', '78537', NULL, '956-283-9999', 'lizette@sunshinepaperusa.com', NULL, NULL),
+    ('Supernova One LLC', NULL, 'Supernova One LLC', 'Supernova One LLC', false, false, false, '5821 Brushwood Ct', 'Chino Hills', 'CA', '91709-7821', NULL, '562-567-1168', 'gloria@supernovaone.com', NULL, NULL),
+    ('Tenchi Trading Inc.', NULL, 'Tenchi Trading Inc.', 'Tenchi Trading Inc.', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('Test', NULL, 'Test', 'Test', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('Texas Books.', NULL, 'Texas Books.', 'Texas Books.', false, false, false, NULL, NULL, 'TX', NULL, NULL, NULL, NULL, NULL, NULL),
+    ('Texas Stone Supply', 'Texas Stone Supply', 'Texas Stone Supply', 'Texas Stone Supply', false, false, false, '2600 East Highway 377', 'Granbury', 'TX', '76049', NULL, NULL, NULL, NULL, NULL),
+    ('The Pallet Professional', NULL, 'The Pallet Professional', 'The Pallet Professional', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('Time World', NULL, 'Time World', 'Time World', false, false, false, '2600 Northaven Rd Ste 100', 'Dallas', 'TX', '75229', NULL, NULL, 'jc@timeworldusa.com', NULL, NULL),
+    ('TK', 'TK', 'TK', 'TK', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('Toho Recycling, LLC', NULL, 'Toho Recycling, LLC', 'Toho Recycling, LLC', false, false, false, '1808 Markley Ln.', 'Laredo', 'TX', '78041', NULL, NULL, 'manuel.garcia@tohorecycling.com', NULL, NULL),
+    ('Transpere, LLC', 'Transpere, LLC', 'Transpere, LLC', 'Transpere, LLC', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('TST Impreso.', 'TST Impreso', 'TST Impreso.', 'TST Impreso.', false, false, false, 'PO Box 506', 'Coppell', 'TX', '75019', NULL, NULL, 'invoices@tstimpreso.com', NULL, NULL),
+    ('Unique Color Imaging.', NULL, 'Unique Color Imaging.', 'Unique Color Imaging.', false, false, false, '8720 Empress Row', 'Dallas', 'TX', '75247', NULL, NULL, 'glenn@metpressinc.com', NULL, NULL),
+    ('United Electronic Recycling', 'United Electronic Recycling', 'United Electronic Recycling', 'United Electronic Recycling', false, false, false, '505 Airline Dr', 'Coppell', 'TX', '75019', NULL, NULL, 'jkeller@uerteam.com', NULL, NULL),
+    ('United OneSource', 'United OneSource', 'United OneSource', 'United OneSource', false, false, false, '2830 Merrell Rd', 'Dallas', 'TX', '75229', NULL, '(214) 630-6100', 'payables@unitedonesource.com', NULL, NULL),
+    ('US Foam.', NULL, 'US Foam.', 'US Foam.', false, false, false, '405 South Elm Ste. 102', 'Denton', 'TX', '76201', NULL, NULL, 'rogera@usfoamcorp.com', NULL, NULL),
+    ('US Mail Depot', 'Us Mail Depot', 'US Mail Depot', 'US Mail Depot', false, false, false, 'P.O. Box 500072
+ · Tx', 'Dallas', 'TX', '75247', NULL, NULL, NULL, NULL, NULL),
+    ('Used Cardboard Boxes', NULL, 'Used Cardboard Boxes', 'Used Cardboard Boxes', false, false, false, '4032 Wilshire Blvd. Suite 402', 'Los Angeles', 'CA', '90010', NULL, NULL, 'accounting@usedcardboardboxes.com', NULL, NULL),
+    ('Venture Metals_', NULL, 'Venture Metals_', 'Venture Metals_', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('Viacore Solutions, LLC', 'Viacore Solutions, LLC', 'Viacore Solutions, LLC', 'Viacore Solutions, LLC', false, false, false, '520 South 18th Street', 'West Des Moines', 'IA', '50265-5532', NULL, '(515) 224-1169', 'accounts.payable@all-statebelting.com', NULL, NULL),
+    ('Virtue It', NULL, 'Virtue It', 'Virtue It', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('Warren (Mack)', 'Motion Industries', 'Warren (Mack)', 'Warren (Mack)', false, false, false, '6633 Forest Park Rd.
+ · Texas.', 'Dallas', NULL, '75235', NULL, NULL, NULL, NULL, NULL),
+    ('Waste Connections', NULL, 'Waste Connections', 'Waste Connections', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('Waste- Track Services', 'Waste-Track Services', 'Waste- Track Services', 'Waste- Track Services', false, false, false, 'PO Box 7114', 'Granbury', 'TX', '76049', NULL, '866-498-8040', 'richard@wastetrackservices.com', NULL, NULL),
+    ('Western Union', NULL, 'Western Union', 'Western Union', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('Whitestar', 'Whitestar Logistics', 'Whitestar', 'Whitestar', false, false, false, '2750 Miller Rd N', 'Garland', 'TX', '75042', NULL, NULL, 'cwarren@customform.com', NULL, NULL),
+    ('Wil-Haul', NULL, 'Wil-Haul', 'Wil-Haul', false, false, false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    ('Wilson Art', NULL, 'Wilson Art', 'Wilson Art', false, false, false, '4051 LaReunion Park Way', 'Dallas', 'TX', '75212', NULL, NULL, NULL, NULL, NULL),
+    ('Woodgrain', 'Woodgrain', 'Woodgrain', 'Woodgrain', false, false, false, 'Huttig Building Products · 2115 Valley View Ln', 'Farmers Branch', 'TX', '75234', NULL, NULL, 'abartolini@woodgrain.com', NULL, NULL),
+    ('WWRowland Investment', NULL, 'WWRowland Investment', 'WWRowland Investment', false, false, false, '8770 S Central Expwy', 'Dallas', 'TX', '75241', NULL, NULL, NULL, NULL, NULL)
+ON CONFLICT (name, COALESCE(company, '')) DO NOTHING;
+
+-- ── VERIFY ──────────────────────────────────────────────────────────
+SELECT 'customers seeded:' AS info, COUNT(*) AS count FROM public.customers;
+SELECT 'pallet customers:' AS info, COUNT(*) AS count FROM public.customers WHERE delivers_pallets = true;
+SELECT 'occ sources:'     AS info, COUNT(*) AS count FROM public.customers WHERE picks_up_occ = true;
+SELECT 'schedule new cols:' AS info, COUNT(*) AS count
+  FROM information_schema.columns
+  WHERE table_name='schedule' AND column_name IN ('customer_id', 'route_sequence');
