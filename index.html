@@ -1,18 +1,2943 @@
--- V3.1.1 FIX: Scope dock uniqueness to non-DMX carriers only
--- The recycling dock can only handle 1 outbound + 1 inbound at a time.
--- DMX routes happen at customer locations, so they don't consume dock capacity.
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f172a">
+<title>Dalmex Scheduler — Dalmex Recycling LLC</title>
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect fill='%230f172a' width='100' height='100' rx='20'/%3E%3Ctext x='50' y='65' font-size='50' text-anchor='middle' fill='%2310b981' font-family='sans-serif' font-weight='bold'%3ED%3C/text%3E%3C/svg%3E">
 
-DROP INDEX IF EXISTS public.idx_schedule_unique_active_slot;
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = { theme: { extend: {
+    colors: {
+      ob: { 500:'#10b981', 600:'#059669', 700:'#047857', 900:'#064e3b' },
+      ib: { 500:'#3b82f6', 600:'#2563eb', 700:'#1d4ed8', 900:'#1e3a8a' },
+    },
+    fontFamily: { display: ['"DM Sans"','sans-serif'], mono: ['"JetBrains Mono"','monospace'] }
+  } } }
+</script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 
--- New rule: among NON-DMX bookings, uniqueness is (time, direction).
--- DMX bookings (swaps, round trips, deliveries) are excluded from the rule.
-CREATE UNIQUE INDEX idx_schedule_unique_active_slot
-  ON public.schedule (time, direction)
-  WHERE status NOT IN ('cancelled', 'no_show')
-    AND carrier NOT ILIKE '%dalmex%';
+<style>
+  :root { --bg:#0f172a; --panel:#1e293b; --ob:#10b981; --ib:#3b82f6; --warn:#f59e0b; }
+  html, body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: #f1f5f9; }
+  .slot-btn { transition: all 0.15s ease; }
+  .slot-btn:active { transform: scale(0.97); }
+  .slot-booked-ob { background: rgba(16,185,129,0.15); border-color: var(--ob); }
+  .slot-booked-ib { background: rgba(59,130,246,0.15); border-color: var(--ib); }
+  .slot-arrived { background: rgba(245,158,11,0.25); border-color: var(--warn); }
+  .slot-completed { background: rgba(100,116,139,0.2); border-color: #64748b; opacity:0.6; }
+  .tab-active { background: var(--panel); border-bottom: 2px solid var(--ob); }
+  .toast-in { animation: toastIn 0.25s ease-out; }
+  @keyframes toastIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  .pulse-dot { animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: #1e293b; }
+  ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+  .inactive-row { opacity: 0.5; }
+  .bol-thumb:active, .copyable:active { transform: scale(0.95); }
+  .copyable { cursor: pointer; transition: color 0.15s; }
+  .copyable:hover { color: #10b981 !important; }
+  .score-bar { transition: width 0.6s ease; }
+  .pdf-thumb { width: 3.5rem; height: 3.5rem; display: flex; align-items: center; justify-content: center;
+    background: #7f1d1d; border: 1px solid #991b1b; border-radius: 0.5rem; color: white;
+    font-weight: 800; font-size: 0.7rem; cursor: pointer; transition: transform 0.15s; }
+  .pdf-thumb:active { transform: scale(0.95); }
+  .doc-thumb { width: 3.5rem; height: 3.5rem; display: flex; align-items: center; justify-content: center;
+    background: #1e3a8a; border: 1px solid #1d4ed8; border-radius: 0.5rem; color: white;
+    font-weight: 800; font-size: 0.65rem; cursor: pointer; transition: transform 0.15s; }
+  .doc-thumb:active { transform: scale(0.95); }
+  /* Route sheet specific */
+  .route-card { transition: transform 0.15s, box-shadow 0.15s; }
+  .route-card:active { transform: scale(0.99); }
+  .route-badge-drop    { background: #2563eb; color: white; }
+  .route-badge-pickup  { background: #10b981; color: white; }
+  .route-badge-swap    { background: #f59e0b; color: white; }
+  .gate-hours-pill { background: rgba(234, 179, 8, 0.15); border: 1px solid rgba(234, 179, 8, 0.4); color: #fde047; }
+  .instr-highlight { background: rgba(234, 179, 8, 0.1); border-left: 3px solid #eab308; }
+  /* Customer search */
+  .customer-search-item { cursor: pointer; transition: background 0.1s; }
+  .customer-search-item:hover { background: rgba(71, 85, 105, 0.5); }
+</style>
+</head>
 
--- Verify
-SELECT indexdef FROM pg_indexes
-WHERE schemaname = 'public'
-  AND tablename = 'schedule'
-  AND indexname = 'idx_schedule_unique_active_slot';
+<body class="min-h-screen">
+
+<header class="border-b border-slate-700 bg-slate-900 sticky top-0 z-40">
+  <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-ob-500 to-ob-700 flex items-center justify-center font-extrabold text-white text-lg">D</div>
+      <div>
+        <h1 class="text-lg font-extrabold tracking-tight">Dalmex Scheduler</h1>
+        <p class="text-xs text-slate-400 -mt-0.5">Dalmex Recycling LLC · Load Booking</p>
+      </div>
+    </div>
+    <div id="connStatus" class="flex items-center gap-1.5 text-xs text-slate-400">
+      <span class="w-2 h-2 rounded-full bg-slate-500"></span><span>—</span>
+    </div>
+  </div>
+  <div class="max-w-6xl mx-auto px-4 flex gap-1 border-t border-slate-800 overflow-x-auto">
+    <button class="tab-btn tab-active px-4 py-2.5 text-sm font-semibold whitespace-nowrap" data-tab="book">Book a Slot</button>
+    <button class="tab-btn px-4 py-2.5 text-sm font-semibold text-slate-400 whitespace-nowrap" data-tab="dashboard">Yard Dashboard</button>
+    <button class="tab-btn px-4 py-2.5 text-sm font-semibold text-slate-400 whitespace-nowrap" data-tab="routes">🚚 My Routes</button>
+    <button class="tab-btn px-4 py-2.5 text-sm font-semibold text-slate-400 whitespace-nowrap" data-tab="admin">🔒 Admin</button>
+    <button class="tab-btn px-4 py-2.5 text-sm font-semibold text-slate-400 whitespace-nowrap" data-tab="settings">Settings</button>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-4 py-6">
+
+  <section id="bookTab" class="tab-content">
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+      <div>
+        <h2 class="text-2xl font-bold">Schedule a Truck</h2>
+        <p class="text-sm text-slate-400">Select a date, then tap a 1-hour slot to book.</p>
+      </div>
+      <div class="flex gap-2">
+        <button id="prevDay" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">◀</button>
+        <button id="todayBtn" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">Today</button>
+        <input type="date" id="bookDate" class="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm">
+        <button id="nextDay" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">▶</button>
+      </div>
+    </div>
+    <div class="flex gap-4 mb-4 text-xs flex-wrap">
+      <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-slate-700 border border-slate-600"></span><span class="text-slate-400">Available</span></div>
+      <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded slot-booked-ob border"></span><span class="text-slate-400">Outbound</span></div>
+      <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded slot-booked-ib border"></span><span class="text-slate-400">Inbound</span></div>
+      <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded slot-arrived border"></span><span class="text-slate-400">Arrived</span></div>
+    </div>
+    <div id="slotGrid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"></div>
+  </section>
+
+  <section id="dashboardTab" class="tab-content hidden">
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+      <div>
+        <h2 class="text-2xl font-bold">Yard Dashboard</h2>
+        <p class="text-sm text-slate-400" id="dashSubtitle">Mark trucks as arrived or completed.</p>
+      </div>
+      <div class="flex gap-2 items-center">
+        <div class="flex items-center gap-1.5 text-xs text-slate-400 mr-2">
+          <span class="pulse-dot w-2 h-2 rounded-full bg-ob-500"></span>
+          <span id="lastRefresh">—</span>
+        </div>
+        <button id="refreshDash" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">↻</button>
+      </div>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+      <div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
+        <div class="text-xs text-slate-400 uppercase tracking-wide">Today · Outbound</div>
+        <div class="text-2xl font-bold text-ob-500 mt-1" id="statOB">0</div>
+      </div>
+      <div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
+        <div class="text-xs text-slate-400 uppercase tracking-wide">Today · Inbound</div>
+        <div class="text-2xl font-bold text-ib-500 mt-1" id="statIB">0</div>
+      </div>
+      <div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
+        <div class="text-xs text-slate-400 uppercase tracking-wide">On Site Now</div>
+        <div class="text-2xl font-bold text-amber-500 mt-1" id="statArrived">0</div>
+      </div>
+      <div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
+        <div class="text-xs text-slate-400 uppercase tracking-wide">Completed</div>
+        <div class="text-2xl font-bold text-slate-400 mt-1" id="statDone">0</div>
+      </div>
+    </div>
+    <div id="dashList" class="space-y-2"></div>
+    <div id="dashEmpty" class="hidden text-center py-12 text-slate-500"><p class="text-sm">No bookings for today yet.</p></div>
+  </section>
+
+  <!-- ═══ 🚚 MY ROUTES TAB (NEW in V3) ═══ -->
+  <section id="routesTab" class="tab-content hidden">
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+      <div>
+        <h2 class="text-2xl font-bold">🚚 My Routes</h2>
+        <p class="text-sm text-slate-400" id="routesSubtitle">Today's DMX driver stops</p>
+      </div>
+      <div class="flex gap-2">
+        <button id="routesPrevDay" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">◀</button>
+        <button id="routesTodayBtn" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">Today</button>
+        <input type="date" id="routesDate" class="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm">
+        <button id="routesNextDay" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">▶</button>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-3 gap-3 mb-5">
+      <div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
+        <div class="text-xs text-slate-400 uppercase tracking-wide">Stops Today</div>
+        <div class="text-2xl font-bold text-slate-200 mt-1" id="routeStatTotal">0</div>
+      </div>
+      <div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
+        <div class="text-xs text-slate-400 uppercase tracking-wide">Completed</div>
+        <div class="text-2xl font-bold text-ob-500 mt-1" id="routeStatDone">0</div>
+      </div>
+      <div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
+        <div class="text-xs text-slate-400 uppercase tracking-wide">Remaining</div>
+        <div class="text-2xl font-bold text-amber-500 mt-1" id="routeStatRemain">0</div>
+      </div>
+    </div>
+
+    <div id="routeList" class="space-y-3"></div>
+    <div id="routeEmpty" class="hidden text-center py-12 text-slate-500">
+      <div class="text-5xl mb-3">🚚</div>
+      <p class="text-sm">No DMX driver stops scheduled for this day.</p>
+      <p class="text-xs mt-1">Bookings where the carrier is "DalMex" appear here.</p>
+    </div>
+  </section>
+
+  <section id="adminTab" class="tab-content hidden">
+    <div id="adminGate" class="max-w-sm mx-auto mt-10">
+      <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700 text-center">
+        <div class="text-4xl mb-3">🔒</div>
+        <h2 class="text-xl font-bold mb-1">Admin Access</h2>
+        <p class="text-sm text-slate-400 mb-4">Enter PIN to manage materials, carriers, customers, and edit bookings.</p>
+        <input type="password" id="pinInput" maxlength="4" inputmode="numeric" class="w-full px-4 py-3 rounded-lg bg-slate-900 border border-slate-700 text-center text-2xl font-mono tracking-widest" placeholder="••••">
+        <button id="pinSubmit" class="w-full mt-3 py-2.5 rounded-lg bg-ob-600 hover:bg-ob-700 font-semibold text-white">Unlock</button>
+        <div id="pinError" class="hidden mt-2 text-xs text-red-400">Incorrect PIN</div>
+      </div>
+    </div>
+    <div id="adminContent" class="hidden">
+      <div class="flex items-center justify-between mb-5 flex-wrap gap-3">
+        <div>
+          <h2 class="text-2xl font-bold">Admin</h2>
+          <p class="text-sm text-slate-400">Manage data and edit bookings.</p>
+        </div>
+        <button id="adminLock" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">🔒 Lock</button>
+      </div>
+      <div class="bg-ob-900/30 border border-ob-700 rounded-lg p-3 mb-5 text-sm text-ob-500">
+        ✓ Admin mode active — tap any booking to edit.
+      </div>
+      <div class="flex gap-1 border-b border-slate-800 mb-5 overflow-x-auto">
+        <button class="admin-subtab px-4 py-2 text-sm font-semibold border-b-2 border-ob-500 text-slate-100 whitespace-nowrap" data-subtab="customers">👥 Customers</button>
+        <button class="admin-subtab px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 whitespace-nowrap" data-subtab="trailers">🚛 Trailer Inventory</button>
+        <button class="admin-subtab px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 whitespace-nowrap" data-subtab="materials">Materials</button>
+        <button class="admin-subtab px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 whitespace-nowrap" data-subtab="carriers">Carriers</button>
+        <button class="admin-subtab px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-400 whitespace-nowrap" data-subtab="scorecard">📊 Scorecards</button>
+      </div>
+
+      <!-- ═══ CUSTOMERS SUB-TAB (NEW in V3) ═══ -->
+      <div id="adminCustomers" class="admin-subpanel">
+        <div class="bg-slate-800 rounded-lg p-4 border border-slate-700 mb-4">
+          <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <h3 class="text-sm font-bold text-slate-300">Customer Directory</h3>
+            <button id="addCustBtn" class="px-4 py-2 rounded bg-ob-600 hover:bg-ob-700 font-semibold text-sm text-white">+ Add Customer</button>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <input id="custSearchInput" type="search" placeholder="Search by name, city..." class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm">
+            <select id="custFilter" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm">
+              <option value="all">All Customers</option>
+              <option value="active">Active Only</option>
+              <option value="pallet">Pallet Buyers</option>
+              <option value="occ">Cardboard Sources</option>
+              <option value="swap">Trailer Swap Partners</option>
+              <option value="untagged">Untagged (No Relationship Set)</option>
+            </select>
+          </div>
+          <p class="text-xs text-slate-500 mt-2" id="custFilterSummary">—</p>
+        </div>
+        <div id="custList" class="space-y-2"></div>
+      </div>
+
+      <!-- ═══ TRAILER INVENTORY SUB-TAB (NEW in V3.1) ═══ -->
+      <div id="adminTrailers" class="admin-subpanel hidden">
+        <div class="bg-slate-800 rounded-lg p-4 border border-slate-700 mb-4">
+          <h3 class="text-sm font-bold mb-3 text-slate-300">Add Trailer</h3>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <input id="newTrlrId" type="text" placeholder="Trailer ID (e.g., 805)" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm font-mono">
+            <select id="newTrlrLoc" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm">
+              <option value="yard">📍 At Yard</option>
+              <option value="customer">👤 At Customer...</option>
+            </select>
+            <button id="addTrlrBtn" class="px-4 py-2 rounded bg-ob-600 hover:bg-ob-700 font-semibold text-sm text-white">+ Add Trailer</button>
+          </div>
+        </div>
+        <div class="grid grid-cols-3 gap-3 mb-4">
+          <div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
+            <div class="text-xs text-slate-400 uppercase">Total Trailers</div>
+            <div class="text-2xl font-bold text-slate-200 mt-1" id="trlrStatTotal">0</div>
+          </div>
+          <div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
+            <div class="text-xs text-slate-400 uppercase">At Yard</div>
+            <div class="text-2xl font-bold text-ob-500 mt-1" id="trlrStatYard">0</div>
+          </div>
+          <div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
+            <div class="text-xs text-slate-400 uppercase">At Customers</div>
+            <div class="text-2xl font-bold text-amber-500 mt-1" id="trlrStatOut">0</div>
+          </div>
+        </div>
+        <div id="trlrList" class="space-y-2"></div>
+      </div>
+
+      <div id="adminMaterials" class="admin-subpanel hidden">
+        <div class="bg-slate-800 rounded-lg p-4 border border-slate-700 mb-4">
+          <h3 class="text-sm font-bold mb-3 text-slate-300">Add Material</h3>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <input id="newMatName" type="text" placeholder="Material name" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm">
+            <select id="newMatDir" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm">
+              <option value="outbound">Outbound (Bales)</option>
+              <option value="inbound">Inbound</option>
+              <option value="both">Both</option>
+            </select>
+            <button id="addMatBtn" class="px-4 py-2 rounded bg-ob-600 hover:bg-ob-700 font-semibold text-sm text-white">+ Add Material</button>
+          </div>
+        </div>
+        <div id="matList" class="space-y-1"></div>
+      </div>
+
+      <div id="adminCarriers" class="admin-subpanel hidden">
+        <div class="bg-slate-800 rounded-lg p-4 border border-slate-700 mb-4">
+          <h3 class="text-sm font-bold mb-3 text-slate-300">Add Carrier</h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <input id="newCarName" type="text" placeholder="Carrier / company name" class="px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm">
+            <button id="addCarBtn" class="px-4 py-2 rounded bg-ob-600 hover:bg-ob-700 font-semibold text-sm text-white">+ Add Carrier</button>
+          </div>
+        </div>
+        <div id="carList" class="space-y-1"></div>
+      </div>
+
+      <div id="adminScorecard" class="admin-subpanel hidden">
+        <div class="bg-slate-800 rounded-lg p-4 border border-slate-700 mb-4">
+          <h3 class="text-sm font-bold mb-2 text-slate-300">📊 Carrier Performance — Last 30 Days</h3>
+          <p class="text-xs text-slate-500">On-time percentage based on scheduled vs actual arrival. ±10 min window counts as on-time.</p>
+        </div>
+        <div id="scoreList" class="space-y-2"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="settingsTab" class="tab-content hidden">
+    <h2 class="text-2xl font-bold mb-2">Settings</h2>
+    <p class="text-sm text-slate-400 mb-4">Database credentials are built in. These fields are only for rotating keys.</p>
+    <div class="bg-slate-800 rounded-lg p-5 border border-slate-700 space-y-4 max-w-xl">
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Supabase URL (override)</label>
+        <input id="supabaseUrl" class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 font-mono text-sm" placeholder="Leave blank to use default">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Supabase Anon Key (override)</label>
+        <textarea id="supabaseKey" rows="3" class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-700 font-mono text-xs" placeholder="Leave blank to use default"></textarea>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Yard Hours</label>
+        <div class="flex gap-2 items-center">
+          <input id="startHour" type="number" min="0" max="23" class="w-20 px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm">
+          <span class="text-slate-500">to</span>
+          <input id="endHour" type="number" min="1" max="24" class="w-20 px-3 py-2 rounded bg-slate-900 border border-slate-700 text-sm">
+          <span class="text-slate-500 text-sm">(24h)</span>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <button id="saveSettings" class="flex-1 py-2.5 rounded-lg bg-ob-600 hover:bg-ob-700 font-semibold text-white">Save</button>
+        <button id="resetSettings" class="px-4 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 font-semibold text-white text-sm">Reset</button>
+      </div>
+      <div id="settingsStatus" class="text-xs text-slate-400 text-center"></div>
+    </div>
+  </section>
+</main>
+
+<!-- BOOKING MODAL (with new Customer field) -->
+<div id="bookModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-end md:items-center justify-center p-0 md:p-4">
+  <div class="bg-slate-900 w-full md:max-w-md rounded-t-2xl md:rounded-2xl border-t md:border border-slate-700 max-h-[95vh] overflow-y-auto">
+    <div class="p-5 border-b border-slate-800 flex items-center justify-between sticky top-0 bg-slate-900 z-10">
+      <div>
+        <h3 class="text-lg font-bold">Book Time Slot</h3>
+        <p id="modalSlotTime" class="text-sm text-slate-400 font-mono">—</p>
+      </div>
+      <button id="closeModal" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center">✕</button>
+    </div>
+    <div class="p-5 space-y-4">
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-2">Direction</label>
+        <div class="grid grid-cols-2 gap-2">
+          <button class="dir-btn py-3 rounded-lg border-2 border-slate-700 font-semibold" data-dir="outbound">
+            <div class="text-ob-500">OUTBOUND</div>
+            <div class="text-xs text-slate-400 font-normal mt-0.5">Bales / Revenue</div>
+          </button>
+          <button class="dir-btn py-3 rounded-lg border-2 border-slate-700 font-semibold" data-dir="inbound">
+            <div class="text-ib-500">INBOUND</div>
+            <div class="text-xs text-slate-400 font-normal mt-0.5">Delivery</div>
+          </button>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Material</label>
+        <select id="modalMaterial" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700">
+          <option value="">-- Select direction first --</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Carrier / Company</label>
+        <input id="modalCarrier" type="text" list="carrierList" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700" placeholder="Type or pick a carrier">
+        <datalist id="carrierList"></datalist>
+        <p id="modalCarrierHint" class="hidden text-xs text-ob-500 mt-1">🚚 DalMex truck — customer required below</p>
+      </div>
+
+      <!-- NEW: Customer picker with search -->
+      <div id="modalCustomerWrap">
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">
+          Customer / Destination
+          <span id="modalCustomerReq" class="hidden text-red-400">*required for DMX</span>
+          <span id="modalCustomerOpt" class="text-slate-500 normal-case">(optional)</span>
+        </label>
+        <input id="modalCustomerSearch" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700" placeholder="Type customer name or city...">
+        <div id="modalCustomerResults" class="hidden mt-1 bg-slate-800 border border-slate-700 rounded-lg max-h-56 overflow-y-auto"></div>
+        <div id="modalCustomerSelected" class="hidden mt-2 p-3 rounded-lg bg-ob-900/30 border border-ob-700 text-sm">
+          <div class="flex items-start justify-between gap-2">
+            <div class="flex-1">
+              <div class="font-bold" id="selCustName">—</div>
+              <div class="text-xs text-slate-400 mt-0.5" id="selCustAddr">—</div>
+              <div class="text-xs text-slate-400" id="selCustPhone"></div>
+            </div>
+            <button id="clearSelCust" class="text-slate-500 hover:text-red-400 text-lg">✕</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TRIP TYPE (appears when DMX carrier + customer selected) -->
+      <div id="modalTripTypeWrap" class="hidden">
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-2">Trip Type</label>
+        <div class="grid grid-cols-2 gap-2">
+          <button class="trip-btn py-2.5 rounded-lg border-2 border-slate-700 font-semibold text-sm" data-trip="delivery">
+            <div>🔵 DROP ONLY</div>
+            <div class="text-xs text-slate-400 font-normal mt-0.5">Drop & leave</div>
+          </button>
+          <button class="trip-btn py-2.5 rounded-lg border-2 border-slate-700 font-semibold text-sm" data-trip="pickup">
+            <div>🟢 PICKUP ONLY</div>
+            <div class="text-xs text-slate-400 font-normal mt-0.5">Load & return</div>
+          </button>
+          <button class="trip-btn py-2.5 rounded-lg border-2 border-slate-700 font-semibold text-sm" data-trip="round_trip">
+            <div>🔄 ROUND TRIP</div>
+            <div class="text-xs text-slate-400 font-normal mt-0.5">Wait while they load</div>
+          </button>
+          <button class="trip-btn py-2.5 rounded-lg border-2 border-slate-700 font-semibold text-sm" data-trip="swap">
+            <div>🔁 TRAILER SWAP</div>
+            <div class="text-xs text-slate-400 font-normal mt-0.5">Leave one, take another</div>
+          </button>
+        </div>
+      </div>
+
+      <!-- SWAP-SPECIFIC FIELDS -->
+      <div id="modalSwapFields" class="hidden bg-amber-900/20 border border-amber-900 rounded-lg p-3 space-y-3">
+        <div class="text-xs font-semibold text-amber-400 uppercase">🔁 Trailer Swap Details</div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Trailer to DROP (bring from yard)</label>
+          <select id="modalDropTrlr" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm font-mono">
+            <option value="">— Select trailer at yard —</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Trailer to PICK UP (return from customer)</label>
+          <select id="modalPickTrlr" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm font-mono">
+            <option value="">— Select trailer at this customer —</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Return Material (OCC etc.)</label>
+          <select id="modalPickMat" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm"></select>
+        </div>
+      </div>
+
+      <!-- ROUND TRIP FIELDS -->
+      <div id="modalRoundTripFields" class="hidden bg-blue-900/20 border border-blue-900 rounded-lg p-3 space-y-3">
+        <div class="text-xs font-semibold text-blue-400 uppercase">🔄 Round Trip Details</div>
+        <div class="text-xs text-slate-400">Same trailer drops and picks up. Driver waits while they unload & load.</div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Return Material (what they load)</label>
+          <select id="modalRoundMat" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm"></select>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">BOL # (opt)</label>
+          <input id="modalBOL" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm" placeholder="289085">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Release # (opt)</label>
+          <input id="modalRelease" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm" placeholder="52633">
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">PO #</label>
+          <input id="modalPO" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Truck ID</label>
+          <input id="modalTruck" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm" placeholder="Tractor">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Trailer ID</label>
+          <input id="modalTrailer" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm" placeholder="Trailer">
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Notes (opt)</label>
+        <textarea id="modalNotes" rows="2" class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm"></textarea>
+      </div>
+      <button id="confirmBook" class="w-full py-3 rounded-lg bg-ob-600 hover:bg-ob-700 font-bold text-white disabled:opacity-50 disabled:cursor-not-allowed">
+        Confirm Booking
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- COMPLETE MODAL -->
+<div id="completeModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-end md:items-center justify-center p-0 md:p-4">
+  <div class="bg-slate-900 w-full md:max-w-md rounded-t-2xl md:rounded-2xl border-t md:border border-slate-700 max-h-[95vh] overflow-y-auto">
+    <div class="p-5 border-b border-slate-800 flex items-center justify-between sticky top-0 bg-slate-900 z-10">
+      <div>
+        <h3 class="text-lg font-bold">Complete Load</h3>
+        <p id="completeModalSummary" class="text-sm text-slate-400">—</p>
+      </div>
+      <button id="closeCompleteModal" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center">✕</button>
+    </div>
+    <div class="p-5 space-y-4">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">BOL #</label>
+          <input id="completeBOL" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Release #</label>
+          <input id="completeRelease" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Truck ID</label>
+          <input id="completeTruck" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Trailer ID</label>
+          <input id="completeTrailer" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">BOL Attachment</label>
+        <input type="file" id="bolCameraInput" accept="image/*" capture="environment" class="hidden">
+        <input type="file" id="bolLibraryInput" accept="*/*" class="hidden">
+        <div class="grid grid-cols-2 gap-2">
+          <button id="bolCameraBtn" class="py-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sm font-semibold">📷 Take Photo</button>
+          <button id="bolLibraryBtn" class="py-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sm font-semibold">📎 Choose File</button>
+        </div>
+        <p class="text-xs text-slate-500 mt-2">Accepts: photos, PDFs, scans · Max 25 MB</p>
+        <div id="bolPhotoPreview" class="hidden mt-3">
+          <div id="bolPreviewContent"></div>
+          <button id="removeBolPhoto" class="mt-2 text-xs text-red-400 hover:text-red-300">Remove attachment</button>
+        </div>
+        <div id="bolUploadProgress" class="hidden mt-2 text-xs text-slate-400">Uploading…</div>
+      </div>
+      <button id="confirmComplete" class="w-full py-3 rounded-lg bg-ob-600 hover:bg-ob-700 font-bold text-white disabled:opacity-50">
+        Mark Complete
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT BOOKING MODAL (with customer picker too) -->
+<div id="editModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-end md:items-center justify-center p-0 md:p-4">
+  <div class="bg-slate-900 w-full md:max-w-md rounded-t-2xl md:rounded-2xl border-t md:border border-slate-700 max-h-[95vh] overflow-y-auto">
+    <div class="p-5 border-b border-slate-800 flex items-center justify-between sticky top-0 bg-slate-900 z-10">
+      <div>
+        <h3 class="text-lg font-bold">✏️ Edit Booking</h3>
+        <p id="editModalId" class="text-xs text-slate-500 font-mono">—</p>
+      </div>
+      <button id="closeEditModal" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center">✕</button>
+    </div>
+    <div class="p-5 space-y-4">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Date</label>
+          <input id="editDate" type="date" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Hour Slot</label>
+          <select id="editHour" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm"></select>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-2">Direction</label>
+        <div class="grid grid-cols-2 gap-2">
+          <button class="edit-dir-btn py-2.5 rounded-lg border-2 border-slate-700 font-semibold text-sm" data-dir="outbound"><span class="text-ob-500">OUTBOUND</span></button>
+          <button class="edit-dir-btn py-2.5 rounded-lg border-2 border-slate-700 font-semibold text-sm" data-dir="inbound"><span class="text-ib-500">INBOUND</span></button>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Material</label>
+        <select id="editMaterial" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700"></select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Carrier</label>
+        <input id="editCarrier" type="text" list="carrierList" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Customer</label>
+        <select id="editCustomer" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm"></select>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">BOL #</label>
+          <input id="editBOL" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Release #</label>
+          <input id="editRelease" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">PO #</label>
+          <input id="editPO" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Truck ID</label>
+          <input id="editTruck" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Trailer ID</label>
+          <input id="editTrailer" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Status</label>
+          <select id="editStatus" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm">
+            <option value="booked">Booked</option>
+            <option value="arrived">On Site (Arrived)</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+            <option value="no_show">No Show</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Arrival Type</label>
+          <select id="editArrivalType" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm">
+            <option value="">— None —</option>
+            <option value="early">⏪ Early</option>
+            <option value="on_time">✓ On Time</option>
+            <option value="late">⏩ Late</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Notes</label>
+        <textarea id="editNotes" rows="3" class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm"></textarea>
+      </div>
+      <div class="flex gap-2 pt-2">
+        <button id="editSave" class="flex-1 py-3 rounded-lg bg-ob-600 hover:bg-ob-700 font-bold text-white">Save Changes</button>
+        <button id="editDelete" class="px-4 py-3 rounded-lg bg-red-900/50 hover:bg-red-900 font-bold text-red-300 text-sm">🗑️</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CUSTOMER EDIT MODAL (NEW in V3) -->
+<div id="customerModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-end md:items-center justify-center p-0 md:p-4">
+  <div class="bg-slate-900 w-full md:max-w-2xl rounded-t-2xl md:rounded-2xl border-t md:border border-slate-700 max-h-[95vh] overflow-y-auto">
+    <div class="p-5 border-b border-slate-800 flex items-center justify-between sticky top-0 bg-slate-900 z-10">
+      <div>
+        <h3 class="text-lg font-bold" id="customerModalTitle">Edit Customer</h3>
+        <p id="customerModalId" class="text-xs text-slate-500 font-mono">—</p>
+      </div>
+      <button id="closeCustomerModal" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center">✕</button>
+    </div>
+    <div class="p-5 space-y-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Name *</label>
+          <input id="custName" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Company</label>
+          <input id="custCompany" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm">
+        </div>
+      </div>
+
+      <!-- Relationship flags -->
+      <div class="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-2">Relationship Type</label>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input id="custFlagPallets" type="checkbox" class="w-4 h-4">
+            <span class="text-sm">📦 We deliver pallets</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input id="custFlagOCC" type="checkbox" class="w-4 h-4">
+            <span class="text-sm">♻️ We pick up OCC</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input id="custFlagSwap" type="checkbox" class="w-4 h-4">
+            <span class="text-sm">🔄 Trailer swap partner</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Shipping address (driver uses this) -->
+      <div class="bg-ob-900/20 rounded-lg p-3 border border-ob-900">
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-xs font-semibold text-ob-500 uppercase">Shipping Address (used by driver)</label>
+          <button id="custCopyBillToShip" class="text-xs text-slate-400 hover:text-ob-500">↓ Copy from billing</button>
+        </div>
+        <input id="custShipStreet" type="text" placeholder="Street address" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm mb-2">
+        <div class="grid grid-cols-3 gap-2">
+          <input id="custShipCity" type="text" placeholder="City" class="px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm">
+          <input id="custShipState" type="text" placeholder="State" class="px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm">
+          <input id="custShipZip" type="text" placeholder="ZIP" class="px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm">
+        </div>
+      </div>
+
+      <!-- Billing address -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-2">Billing Address <span class="normal-case text-slate-500">(from QuickBooks)</span></label>
+        <input id="custBillStreet" type="text" placeholder="Street address" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm mb-2">
+        <div class="grid grid-cols-3 gap-2">
+          <input id="custBillCity" type="text" placeholder="City" class="px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm">
+          <input id="custBillState" type="text" placeholder="State" class="px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm">
+          <input id="custBillZip" type="text" placeholder="ZIP" class="px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm">
+        </div>
+      </div>
+
+      <!-- Contact -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Contact Name</label>
+          <input id="custContact" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Phone</label>
+          <input id="custPhone" type="tel" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Email</label>
+          <input id="custEmail" type="email" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm">
+        </div>
+      </div>
+
+      <!-- Driver-facing intel -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-amber-500 uppercase mb-1">Gate Hours</label>
+          <input id="custGateHours" type="text" placeholder="Mon-Fri 7am-4pm" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Preferred Day</label>
+          <input id="custPrefDay" type="text" placeholder="Tuesdays only" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm">
+        </div>
+      </div>
+
+      <div class="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
+        <label class="flex items-center gap-2 cursor-pointer mb-2">
+          <input id="custReqAppt" type="checkbox" class="w-4 h-4">
+          <span class="text-sm font-semibold">📅 Requires scheduled appointment</span>
+        </label>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Appointment Contact</label>
+          <input id="custApptContact" type="text" placeholder="Call Marcus at 555-1234" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm">
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-amber-500 uppercase mb-1">Special Instructions</label>
+        <textarea id="custSpecialInstr" rows="3" placeholder="Dock 3, gate code 4472, call Mike 15 min out..." class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm"></textarea>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Internal Notes</label>
+        <textarea id="custNotes" rows="2" placeholder="Notes for office use..." class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm"></textarea>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input id="custActive" type="checkbox" class="w-4 h-4" checked>
+          <span class="text-sm">Active (shown in picker)</span>
+        </label>
+      </div>
+
+      <div class="flex gap-2 pt-2 border-t border-slate-800">
+        <button id="custSave" class="flex-1 py-3 rounded-lg bg-ob-600 hover:bg-ob-700 font-bold text-white">Save Customer</button>
+        <button id="custDelete" class="px-4 py-3 rounded-lg bg-red-900/50 hover:bg-red-900 font-bold text-red-300 text-sm">🗑️</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TRAILER EDIT MODAL (NEW in V3.1) -->
+<div id="trailerModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-end md:items-center justify-center p-0 md:p-4">
+  <div class="bg-slate-900 w-full md:max-w-md rounded-t-2xl md:rounded-2xl border-t md:border border-slate-700 max-h-[95vh] overflow-y-auto">
+    <div class="p-5 border-b border-slate-800 flex items-center justify-between sticky top-0 bg-slate-900 z-10">
+      <div>
+        <h3 class="text-lg font-bold" id="trailerModalTitle">Edit Trailer</h3>
+        <p id="trailerModalId" class="text-xs text-slate-500 font-mono">—</p>
+      </div>
+      <button id="closeTrailerModal" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center">✕</button>
+    </div>
+    <div class="p-5 space-y-4">
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Trailer ID *</label>
+        <input id="trlrIdInput" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm font-mono">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Current Location</label>
+        <div class="grid grid-cols-2 gap-2">
+          <button class="loc-btn py-3 rounded-lg border-2 border-slate-700 font-semibold text-sm" data-loc="yard">
+            <div class="text-ob-500">📍 AT YARD</div>
+          </button>
+          <button class="loc-btn py-3 rounded-lg border-2 border-slate-700 font-semibold text-sm" data-loc="customer">
+            <div class="text-amber-500">👤 AT CUSTOMER</div>
+          </button>
+        </div>
+      </div>
+      <div id="trlrCustomerWrap" class="hidden">
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Which Customer?</label>
+        <select id="trlrCustomer" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm"></select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Notes (optional)</label>
+        <textarea id="trlrNotes" rows="2" class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm" placeholder="e.g., has damaged rear door"></textarea>
+      </div>
+      <div class="flex items-center gap-2">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input id="trlrActive" type="checkbox" class="w-4 h-4" checked>
+          <span class="text-sm">Active (in fleet)</span>
+        </label>
+      </div>
+      <div class="flex gap-2 pt-2 border-t border-slate-800">
+        <button id="trlrSave" class="flex-1 py-3 rounded-lg bg-ob-600 hover:bg-ob-700 font-bold text-white">Save Trailer</button>
+        <button id="trlrDelete" class="px-4 py-3 rounded-lg bg-red-900/50 hover:bg-red-900 font-bold text-red-300 text-sm">🗑️</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="photoViewer" class="hidden fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4" onclick="this.classList.add('hidden')">
+  <img id="photoViewerImg" class="max-w-full max-h-full rounded-lg" alt="BOL">
+</div>
+
+<div id="toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-lg shadow-2xl font-semibold text-sm toast-in"></div>
+
+<script>
+'use strict';
+
+const DEFAULT_SUPABASE_URL = 'https://csadynnlzbtxrqsiyxjy.supabase.co';
+const DEFAULT_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNzYWR5bm5semJ0eHJxc2l5eGp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0Njk2NjYsImV4cCI6MjA5MjA0NTY2Nn0.HvqgeMvU3QEaH5UlQcbwLUDd6Q4SjSerz9UMSYWZ6co';
+const DEFAULT_START_HOUR = 7;
+const DEFAULT_END_HOUR   = 17;
+const ADMIN_PIN = '2828';
+const BOL_BUCKET = 'bol-photos';
+const ADD_NEW_MATERIAL = '__ADD_NEW__';
+const ON_TIME_WINDOW_MIN = 10;
+
+const isImageFile = (file) => file && (file.type || '').startsWith('image/');
+const isPdfFile   = (file) => file && ((file.type || '').includes('pdf') || /\.pdf$/i.test(file.name || ''));
+const isImageUrl  = (url)  => url && /\.(jpg|jpeg|png|webp|heic|heif|gif)(\?|$)/i.test(url);
+const isPdfUrl    = (url)  => url && /\.pdf(\?|$)/i.test(url);
+const fileExt     = (name) => (name || '').split('.').pop().toLowerCase() || 'file';
+const isDmxCarrier = (carrier) => carrier && /dalmex/i.test(carrier);
+
+const App = {
+    state: {
+        supabaseUrl:  DEFAULT_SUPABASE_URL,
+        supabaseKey:  DEFAULT_SUPABASE_KEY,
+        startHour:    DEFAULT_START_HOUR,
+        endHour:      DEFAULT_END_HOUR,
+        activeDate:   new Date().toISOString().slice(0,10),
+        routesDate:   new Date().toISOString().slice(0,10),
+        activeTab:    'book',
+        adminUnlocked: false,
+        adminSubtab: 'customers',
+        custFilter:  'active',
+        custSearch:  '',
+        selectedSlot: null,
+        selectedDir:  null,
+        selectedCustomerId: null,
+        schedule:     [],
+        materials:    [],
+        carriers:     [],
+        customers:    [],
+        completingBooking: null,
+        editingBooking: null,
+        editingDir: null,
+        pendingBolPhoto: null,
+        editingCustomer: null,
+        // V3.1 additions
+        trailers: [],
+        editingTrailer: null,
+        editingTrailerLoc: 'yard',
+        selectedTripType: null,
+    },
+
+    init() {
+        this.loadConfig();
+        this.bindEvents();
+        document.getElementById('bookDate').value = this.state.activeDate;
+        document.getElementById('routesDate').value = this.state.routesDate;
+        this.loadMaterials();
+        this.loadCarriers();
+        this.loadCustomers();
+        this.loadTrailers();
+        this.loadSchedule();
+        setInterval(() => { if (this.state.activeTab === 'dashboard' || this.state.activeTab === 'routes') this.loadSchedule(); }, 30000);
+    },
+
+    loadConfig() {
+        const storedUrl   = localStorage.getItem('dalmex_sb_url');
+        const storedKey   = localStorage.getItem('dalmex_sb_key');
+        const storedStart = localStorage.getItem('dalmex_start_hr');
+        const storedEnd   = localStorage.getItem('dalmex_end_hr');
+        this.state.supabaseUrl = storedUrl || DEFAULT_SUPABASE_URL;
+        this.state.supabaseKey = storedKey || DEFAULT_SUPABASE_KEY;
+        this.state.startHour   = storedStart ? parseInt(storedStart, 10) : DEFAULT_START_HOUR;
+        this.state.endHour     = storedEnd   ? parseInt(storedEnd, 10)   : DEFAULT_END_HOUR;
+        document.getElementById('supabaseUrl').value = storedUrl || '';
+        document.getElementById('supabaseKey').value = storedKey || '';
+        document.getElementById('startHour').value   = this.state.startHour;
+        document.getElementById('endHour').value     = this.state.endHour;
+        this.updateConnStatus();
+    },
+
+    saveConfig() {
+        const urlInput = document.getElementById('supabaseUrl').value.trim().replace(/\/$/, '');
+        const keyInput = document.getElementById('supabaseKey').value.trim();
+        const sh = parseInt(document.getElementById('startHour').value, 10);
+        const eh = parseInt(document.getElementById('endHour').value, 10);
+        if (isNaN(sh) || isNaN(eh) || sh >= eh) { this.toast('Invalid hours', 'error'); return; }
+        if (urlInput) localStorage.setItem('dalmex_sb_url', urlInput); else localStorage.removeItem('dalmex_sb_url');
+        if (keyInput) localStorage.setItem('dalmex_sb_key', keyInput); else localStorage.removeItem('dalmex_sb_key');
+        localStorage.setItem('dalmex_start_hr', sh);
+        localStorage.setItem('dalmex_end_hr', eh);
+        this.state.supabaseUrl = urlInput || DEFAULT_SUPABASE_URL;
+        this.state.supabaseKey = keyInput || DEFAULT_SUPABASE_KEY;
+        this.state.startHour = sh;
+        this.state.endHour = eh;
+        document.getElementById('settingsStatus').textContent = '✓ Saved ' + new Date().toLocaleTimeString();
+        this.updateConnStatus();
+        this.toast('Settings saved', 'success');
+        this.loadSchedule();
+    },
+
+    resetConfig() {
+        ['dalmex_sb_url','dalmex_sb_key','dalmex_start_hr','dalmex_end_hr'].forEach(k => localStorage.removeItem(k));
+        this.loadConfig();
+        this.toast('Reset to defaults', 'success');
+        this.loadSchedule();
+    },
+
+    updateConnStatus() {
+        const el = document.getElementById('connStatus');
+        if (this.state.supabaseUrl && this.state.supabaseKey) {
+            el.innerHTML = '<span class="w-2 h-2 rounded-full bg-ob-500"></span><span>Connected</span>';
+        } else {
+            el.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-500"></span><span>Not configured</span>';
+        }
+    },
+
+    async supabase(endpoint, method = 'GET', body = null) {
+        if (!this.state.supabaseUrl || !this.state.supabaseKey) { this.toast('Database not configured', 'error'); return null; }
+        const url = `${this.state.supabaseUrl}/rest/v1/${endpoint}`;
+        const headers = {
+            'apikey': this.state.supabaseKey,
+            'Authorization': `Bearer ${this.state.supabaseKey}`,
+            'Content-Type': 'application/json',
+        };
+        if (method === 'POST' || method === 'PATCH') headers['Prefer'] = 'return=representation';
+        const opts = { method, headers };
+        if (body) opts.body = JSON.stringify(body);
+        try {
+            const res = await fetch(url, opts);
+            if (!res.ok) {
+                const err = await res.text();
+                console.error(`[Supabase ${method} ${endpoint}]`, res.status, err);
+                this.toast(`API error ${res.status}`, 'error');
+                return null;
+            }
+            if (res.status === 204 || method === 'DELETE') return [];
+            const text = await res.text();
+            return text ? JSON.parse(text) : [];
+        } catch (e) {
+            console.error('[Supabase fetch]', e);
+            this.toast('Network error', 'error');
+            return null;
+        }
+    },
+
+    async uploadBolFile(file, bookingId) {
+        const ext = fileExt(file.name);
+        const path = `bookings/${bookingId}-${Date.now()}.${ext}`;
+        const url = `${this.state.supabaseUrl}/storage/v1/object/${BOL_BUCKET}/${path}`;
+        try {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'apikey': this.state.supabaseKey,
+                    'Authorization': `Bearer ${this.state.supabaseKey}`,
+                    'Content-Type': file.type || 'application/octet-stream',
+                    'x-upsert': 'true',
+                },
+                body: file,
+            });
+            if (!res.ok) {
+                const err = await res.text();
+                console.error('[Storage upload]', res.status, err);
+                this.toast('Upload failed: ' + res.status, 'error');
+                return null;
+            }
+            const publicUrl = `${this.state.supabaseUrl}/storage/v1/object/public/${BOL_BUCKET}/${path}`;
+            return { path, publicUrl };
+        } catch (e) {
+            console.error('[Storage upload]', e);
+            this.toast('Upload network error', 'error');
+            return null;
+        }
+    },
+
+    async generateBookingHash(payload) {
+        const enc = new TextEncoder().encode(JSON.stringify(payload) + Date.now());
+        const buf = await crypto.subtle.digest('SHA-256', enc);
+        return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    },
+
+    async loadMaterials() {
+        const rows = await this.supabase('materials?order=sort_order.asc,name.asc');
+        this.state.materials = rows || [];
+        this.renderMaterialDropdown();
+        if (this.state.activeTab === 'admin' && this.state.adminSubtab === 'materials') this.renderMaterialsAdmin();
+    },
+
+    async loadCarriers() {
+        const rows = await this.supabase('carriers?order=sort_order.asc,name.asc');
+        this.state.carriers = rows || [];
+        this.renderCarrierDatalist();
+        if (this.state.activeTab === 'admin' && this.state.adminSubtab === 'carriers') this.renderCarriersAdmin();
+    },
+
+    async loadCustomers() {
+        const rows = await this.supabase('customers?order=name.asc');
+        this.state.customers = rows || [];
+        if (this.state.activeTab === 'admin' && this.state.adminSubtab === 'customers') this.renderCustomersAdmin();
+    },
+
+    async loadTrailers() {
+        const rows = await this.supabase('trailer_locations?order=trailer_id.asc');
+        this.state.trailers = rows || [];
+        if (this.state.activeTab === 'admin' && this.state.adminSubtab === 'trailers') this.renderTrailersAdmin();
+    },
+
+    trailerById(id) {
+        if (!id) return null;
+        return this.state.trailers.find(t => String(t.id) === String(id));
+    },
+
+    trailerByTrailerId(tid) {
+        if (!tid) return null;
+        return this.state.trailers.find(t => String(t.trailer_id).toLowerCase() === String(tid).toLowerCase());
+    },
+
+    trailersAtYard() {
+        return this.state.trailers.filter(t => t.active && t.current_location === 'yard');
+    },
+
+    trailersAtCustomer(customerId) {
+        if (!customerId) return [];
+        return this.state.trailers.filter(t => t.active && String(t.customer_id) === String(customerId));
+    },
+
+    // Helper: get customer lookup table for fast ID resolution
+    customerById(id) {
+        if (!id) return null;
+        return this.state.customers.find(c => String(c.id) === String(id));
+    },
+
+    // Helper: what address should driver see?
+    customerShipAddress(c) {
+        if (!c) return null;
+        const ship = c.shipping_address;
+        const hasShip = ship && ship.trim();
+        const street = hasShip ? c.shipping_address : c.billing_address;
+        const city   = hasShip ? c.shipping_city    : c.billing_city;
+        const state  = hasShip ? c.shipping_state   : c.billing_state;
+        const zip    = hasShip ? c.shipping_zip     : c.billing_zip;
+        const parts = [street, [city, state].filter(Boolean).join(', '), zip].filter(Boolean);
+        return parts.length ? parts.join(', ') : null;
+    },
+
+    async loadSchedule() {
+        if (!this.state.supabaseUrl || !this.state.supabaseKey) { this.renderSlotGrid(); return; }
+        const d = new Date(this.state.activeDate + 'T00:00:00');
+        const from = new Date(d); from.setDate(d.getDate() - 1);
+        const to   = new Date(d); to.setDate(d.getDate() + 2);
+        const rows = await this.supabase(`schedule?time=gte.${from.toISOString()}&time=lt.${to.toISOString()}&order=time.asc`);
+        this.state.schedule = rows || [];
+        if (this.state.activeTab === 'book') this.renderSlotGrid();
+        if (this.state.activeTab === 'dashboard') this.renderDashboard();
+        if (this.state.activeTab === 'routes') await this.renderRoutes();
+    },
+
+    // ─── BOOKING SLOT GRID ───────────────────────────────────
+    renderSlotGrid() {
+        const grid = document.getElementById('slotGrid');
+        const date = this.state.activeDate;
+        const slots = [];
+        for (let h = this.state.startHour; h < this.state.endHour; h++) {
+            slots.push({ hour: h, iso: this.localIsoForHour(date, h) });
+        }
+        grid.innerHTML = slots.map(s => {
+            const booking = this.state.schedule.find(r =>
+                new Date(r.time).getTime() === new Date(s.iso).getTime() &&
+                r.status !== 'cancelled' && r.status !== 'no_show'
+            );
+            const hourLabel = this.formatHour(s.hour);
+            const hourEnd   = this.formatHour(s.hour + 1);
+            if (!booking) {
+                return `
+                <button class="slot-btn p-4 rounded-xl bg-slate-800 border border-slate-700 hover:border-ob-500 text-left" data-slot="${s.iso}">
+                    <div class="text-sm font-mono text-slate-400">${hourLabel} – ${hourEnd}</div>
+                    <div class="text-sm font-semibold text-slate-300 mt-1">Available</div>
+                    <div class="text-xs text-slate-500 mt-0.5">Tap to book</div>
+                </button>`;
+            }
+            const cls = booking.status === 'arrived' ? 'slot-arrived'
+                      : booking.status === 'completed' ? 'slot-completed'
+                      : booking.direction === 'outbound' ? 'slot-booked-ob' : 'slot-booked-ib';
+            const dirLabel = booking.direction === 'outbound' ? 'OUTBOUND' : 'INBOUND';
+            const dirColor = booking.direction === 'outbound' ? 'text-ob-500' : 'text-ib-500';
+            let statusLabel = '📋 BOOKED';
+            if (booking.status === 'arrived') {
+                statusLabel = booking.arrival_type === 'late' ? '⏩ LATE'
+                            : booking.arrival_type === 'early' ? '⏪ EARLY'
+                            : '🟡 ON SITE';
+            } else if (booking.status === 'completed') statusLabel = '✓ DONE';
+            const customer = this.customerById(booking.customer_id);
+            const custLine = customer ? `<div class="text-xs text-slate-500 truncate">→ ${this.esc(customer.display_name || customer.name)}</div>` : '';
+            return `
+            <div class="slot-btn p-4 rounded-xl border-2 ${cls}">
+                <div class="flex justify-between items-start">
+                    <div class="text-sm font-mono text-slate-300">${hourLabel} – ${hourEnd}</div>
+                    <div class="text-xs font-bold ${dirColor}">${dirLabel}</div>
+                </div>
+                <div class="text-sm font-semibold mt-1.5 truncate">${this.esc(booking.carrier)}</div>
+                <div class="text-xs text-slate-400 mt-0.5 truncate">${this.esc(booking.material)}</div>
+                ${custLine}
+                <div class="text-xs mt-1 font-semibold">${statusLabel}</div>
+            </div>`;
+        }).join('');
+        grid.querySelectorAll('[data-slot]').forEach(btn => {
+            btn.addEventListener('click', () => this.openBookModal(btn.dataset.slot));
+        });
+    },
+
+    // ─── BOOKING MODAL ──────────────────────────────────────
+    openBookModal(slotISO) {
+        this.state.selectedSlot = slotISO;
+        this.state.selectedDir = null;
+        this.state.selectedCustomerId = null;
+        this.state.selectedTripType = null;
+        const d = new Date(slotISO);
+        const endD = new Date(d.getTime() + 60*60*1000);
+        document.getElementById('modalSlotTime').textContent =
+            `${d.toLocaleDateString()} · ${this.formatHour(d.getHours())} – ${this.formatHour(endD.getHours())}`;
+        document.querySelectorAll('.dir-btn').forEach(b => b.classList.remove('border-ob-500', 'border-ib-500', 'bg-ob-900/30', 'bg-ib-900/30'));
+        document.getElementById('modalMaterial').innerHTML = '<option value="">-- Select direction first --</option>';
+        ['modalCarrier','modalBOL','modalRelease','modalPO','modalTruck','modalTrailer','modalNotes','modalCustomerSearch'].forEach(id => document.getElementById(id).value = '');
+        document.getElementById('modalCustomerResults').classList.add('hidden');
+        document.getElementById('modalCustomerSelected').classList.add('hidden');
+        document.getElementById('modalCarrierHint').classList.add('hidden');
+        document.getElementById('modalCustomerReq').classList.add('hidden');
+        document.getElementById('modalCustomerOpt').classList.remove('hidden');
+        document.getElementById('modalTripTypeWrap').classList.add('hidden');
+        document.getElementById('modalSwapFields').classList.add('hidden');
+        document.getElementById('modalRoundTripFields').classList.add('hidden');
+        document.querySelectorAll('.trip-btn').forEach(b => b.classList.remove('border-ob-500', 'border-ib-500', 'border-amber-500', 'border-blue-500', 'bg-ob-900/30', 'bg-ib-900/30', 'bg-amber-900/30', 'bg-blue-900/30'));
+        this.updateConfirmBtn();
+        document.getElementById('bookModal').classList.remove('hidden');
+    },
+
+    closeBookModal() {
+        document.getElementById('bookModal').classList.add('hidden');
+        this.state.selectedSlot = null;
+        this.state.selectedDir = null;
+        this.state.selectedCustomerId = null;
+        this.state.selectedTripType = null;
+    },
+
+    selectDirection(dir) {
+        this.state.selectedDir = dir;
+        document.querySelectorAll('.dir-btn').forEach(b => {
+            b.classList.remove('border-ob-500', 'border-ib-500', 'bg-ob-900/30', 'bg-ib-900/30');
+            if (b.dataset.dir === dir) {
+                if (dir === 'outbound') b.classList.add('border-ob-500', 'bg-ob-900/30');
+                else b.classList.add('border-ib-500', 'bg-ib-900/30');
+            }
+        });
+        const btn = document.getElementById('confirmBook');
+        btn.classList.remove('bg-ob-600', 'hover:bg-ob-700', 'bg-ib-600', 'hover:bg-ib-700');
+        if (dir === 'outbound') btn.classList.add('bg-ob-600', 'hover:bg-ob-700');
+        else btn.classList.add('bg-ib-600', 'hover:bg-ib-700');
+        this.renderMaterialDropdown();
+        this.updateConfirmBtn();
+    },
+
+    // Updates DMX hint when carrier changes
+    onCarrierInput() {
+        const carrier = document.getElementById('modalCarrier').value.trim();
+        const isDmx = isDmxCarrier(carrier);
+        document.getElementById('modalCarrierHint').classList.toggle('hidden', !isDmx);
+        document.getElementById('modalCustomerReq').classList.toggle('hidden', !isDmx);
+        document.getElementById('modalCustomerOpt').classList.toggle('hidden', isDmx);
+        this.refreshTripTypeVisibility();
+        this.updateConfirmBtn();
+    },
+
+    renderMaterialDropdown() {
+        const sel = document.getElementById('modalMaterial');
+        if (!this.state.selectedDir) { sel.innerHTML = '<option value="">-- Select direction first --</option>'; return; }
+        const items = this.state.materials.filter(m =>
+            m.active && (m.direction === this.state.selectedDir || m.direction === 'both')
+        );
+        sel.innerHTML = '<option value="">-- Select material --</option>' +
+            items.map(m => `<option value="${this.esc(m.name)}">${this.esc(m.name)}</option>`).join('') +
+            `<option value="${ADD_NEW_MATERIAL}">➕ Add new material…</option>`;
+    },
+
+    renderCarrierDatalist() {
+        document.getElementById('carrierList').innerHTML = this.state.carriers
+            .filter(c => c.active).map(c => `<option value="${this.esc(c.name)}">`).join('');
+    },
+
+    // ─── CUSTOMER PICKER (searchable) ───────────────────────
+    onCustomerSearchInput() {
+        const q = document.getElementById('modalCustomerSearch').value.trim().toLowerCase();
+        const results = document.getElementById('modalCustomerResults');
+        if (!q) { results.classList.add('hidden'); return; }
+        // Filter active customers by name/city/company match
+        const isOutbound = this.state.selectedDir === 'outbound';
+        const matches = this.state.customers.filter(c => {
+            if (!c.active) return false;
+            // Outbound: prefer pallet_buyer/swap. Inbound: prefer occ_source/swap.
+            // But always show all matches — priority is just sort order.
+            const hay = [c.name, c.display_name, c.company, c.billing_city, c.shipping_city, c.contact_name]
+                .filter(Boolean).join(' ').toLowerCase();
+            return hay.includes(q);
+        }).slice(0, 10);
+        if (!matches.length) {
+            results.innerHTML = `<div class="p-3 text-sm text-slate-500 text-center">No match · <button class="text-ob-500 font-semibold" onclick="App.addCustomerFromSearch()">+ Add "${this.esc(q)}"</button></div>`;
+        } else {
+            // Sort matches by relevance (delivery flag for outbound, occ flag for inbound)
+            matches.sort((a, b) => {
+                const aPrio = isOutbound ? (a.delivers_pallets || a.trailer_swap ? 0 : 1) : (a.picks_up_occ || a.trailer_swap ? 0 : 1);
+                const bPrio = isOutbound ? (b.delivers_pallets || b.trailer_swap ? 0 : 1) : (b.picks_up_occ || b.trailer_swap ? 0 : 1);
+                return aPrio - bPrio;
+            });
+            results.innerHTML = matches.map(c => {
+                const city = c.shipping_city || c.billing_city || '';
+                const badges = [];
+                if (c.delivers_pallets) badges.push('<span class="text-xs text-ob-500">📦</span>');
+                if (c.picks_up_occ)     badges.push('<span class="text-xs text-blue-400">♻️</span>');
+                if (c.trailer_swap)     badges.push('<span class="text-xs text-amber-500">🔄</span>');
+                return `<div class="customer-search-item px-3 py-2 border-b border-slate-700" data-id="${c.id}">
+                    <div class="flex items-center justify-between">
+                        <span class="font-semibold text-sm">${this.esc(c.display_name || c.name)}</span>
+                        <div class="flex gap-1">${badges.join('')}</div>
+                    </div>
+                    ${city ? `<div class="text-xs text-slate-500">${this.esc(city)}</div>` : ''}
+                </div>`;
+            }).join('') + `<div class="customer-search-item px-3 py-2 text-sm text-ob-500 text-center" onclick="App.addCustomerFromSearch()">➕ Add new customer</div>`;
+        }
+        results.classList.remove('hidden');
+        // Bind click handlers for selection
+        results.querySelectorAll('[data-id]').forEach(el => {
+            el.addEventListener('click', () => this.selectCustomer(el.dataset.id));
+        });
+    },
+
+    selectCustomer(id) {
+        const c = this.customerById(id);
+        if (!c) return;
+        this.state.selectedCustomerId = id;
+        document.getElementById('selCustName').textContent = c.display_name || c.name;
+        const addr = this.customerShipAddress(c);
+        document.getElementById('selCustAddr').textContent = addr || '(no address on file)';
+        document.getElementById('selCustPhone').textContent = c.phone || '';
+        document.getElementById('modalCustomerSelected').classList.remove('hidden');
+        document.getElementById('modalCustomerResults').classList.add('hidden');
+        document.getElementById('modalCustomerSearch').value = '';
+        this.refreshTripTypeVisibility();
+        this.updateConfirmBtn();
+    },
+
+    clearSelectedCustomer() {
+        this.state.selectedCustomerId = null;
+        document.getElementById('modalCustomerSelected').classList.add('hidden');
+        this.refreshTripTypeVisibility();
+        this.updateConfirmBtn();
+    },
+
+    // Show Trip Type selector only when: DMX carrier + customer selected
+    refreshTripTypeVisibility() {
+        const carrier = document.getElementById('modalCarrier').value.trim();
+        const isDmx = isDmxCarrier(carrier);
+        const hasCustomer = !!this.state.selectedCustomerId;
+        const wrap = document.getElementById('modalTripTypeWrap');
+        if (isDmx && hasCustomer) {
+            wrap.classList.remove('hidden');
+        } else {
+            wrap.classList.add('hidden');
+            this.clearTripType();
+        }
+    },
+
+    clearTripType() {
+        this.state.selectedTripType = null;
+        document.querySelectorAll('.trip-btn').forEach(b => {
+            b.classList.remove('border-ob-500', 'border-ib-500', 'border-amber-500', 'border-blue-500', 'bg-ob-900/30', 'bg-ib-900/30', 'bg-amber-900/30', 'bg-blue-900/30');
+        });
+        document.getElementById('modalSwapFields').classList.add('hidden');
+        document.getElementById('modalRoundTripFields').classList.add('hidden');
+    },
+
+    selectTripType(trip) {
+        this.state.selectedTripType = trip;
+        // Visual state
+        document.querySelectorAll('.trip-btn').forEach(b => {
+            b.classList.remove('border-ob-500', 'border-ib-500', 'border-amber-500', 'border-blue-500', 'bg-ob-900/30', 'bg-ib-900/30', 'bg-amber-900/30', 'bg-blue-900/30');
+            if (b.dataset.trip === trip) {
+                if (trip === 'delivery')     b.classList.add('border-ob-500', 'bg-ob-900/30');
+                else if (trip === 'pickup')  b.classList.add('border-ib-500', 'bg-ib-900/30');
+                else if (trip === 'swap')    b.classList.add('border-amber-500', 'bg-amber-900/30');
+                else if (trip === 'round_trip') b.classList.add('border-blue-500', 'bg-blue-900/30');
+            }
+        });
+        // Auto-set direction based on trip type
+        if (trip === 'delivery' || trip === 'round_trip' || trip === 'swap') {
+            this.selectDirection('outbound');
+        } else if (trip === 'pickup') {
+            this.selectDirection('inbound');
+        }
+        // Toggle conditional field visibility
+        const swapFields = document.getElementById('modalSwapFields');
+        const roundFields = document.getElementById('modalRoundTripFields');
+        swapFields.classList.toggle('hidden', trip !== 'swap');
+        roundFields.classList.toggle('hidden', trip !== 'round_trip');
+        if (trip === 'swap') this.populateSwapTrailerPickers();
+        if (trip === 'swap' || trip === 'round_trip') this.populateReturnMaterialPickers();
+        this.updateConfirmBtn();
+    },
+
+    populateSwapTrailerPickers() {
+        const dropSel = document.getElementById('modalDropTrlr');
+        const pickSel = document.getElementById('modalPickTrlr');
+        const yardTrailers = this.trailersAtYard();
+        const custTrailers = this.trailersAtCustomer(this.state.selectedCustomerId);
+        dropSel.innerHTML = '<option value="">— Select trailer at yard —</option>' +
+            yardTrailers.map(t => `<option value="${this.esc(t.trailer_id)}">${this.esc(t.trailer_id)}</option>`).join('') +
+            '<option value="__OTHER__">Other / type in truck field...</option>';
+        if (custTrailers.length) {
+            pickSel.innerHTML = '<option value="">— Select trailer at this customer —</option>' +
+                custTrailers.map(t => `<option value="${this.esc(t.trailer_id)}">${this.esc(t.trailer_id)}</option>`).join('') +
+                '<option value="__OTHER__">Other / type in truck field...</option>';
+        } else {
+            pickSel.innerHTML = '<option value="">— No trailers tracked at this customer —</option>' +
+                '<option value="__OTHER__">Enter trailer ID manually...</option>';
+        }
+    },
+
+    populateReturnMaterialPickers() {
+        const items = this.state.materials.filter(m =>
+            m.active && (m.direction === 'inbound' || m.direction === 'both')
+        );
+        const opts = '<option value="">— Select return material —</option>' +
+            items.map(m => `<option value="${this.esc(m.name)}">${this.esc(m.name)}</option>`).join('');
+        document.getElementById('modalPickMat').innerHTML = opts;
+        document.getElementById('modalRoundMat').innerHTML = opts;
+    },
+
+    async addCustomerFromSearch() {
+        const q = document.getElementById('modalCustomerSearch').value.trim();
+        if (!q) return;
+        if (!confirm(`Add new customer "${q}"?\n\nYou can fill in their address/details after in Admin → Customers.`)) return;
+        const res = await this.supabase('customers', 'POST', { name: q, delivers_pallets: this.state.selectedDir === 'outbound', picks_up_occ: this.state.selectedDir === 'inbound' });
+        if (res && res.length) {
+            this.toast(`✓ Added "${q}"`, 'success');
+            await this.loadCustomers();
+            this.selectCustomer(res[0].id);
+        }
+    },
+
+    async handleMaterialChange() {
+        const sel = document.getElementById('modalMaterial');
+        if (sel.value === ADD_NEW_MATERIAL) {
+            const name = prompt('New material name:');
+            if (!name || !name.trim()) { sel.value = ''; this.updateConfirmBtn(); return; }
+            const trimmed = name.trim();
+            const existing = this.state.materials.find(m =>
+                m.name.toLowerCase() === trimmed.toLowerCase() &&
+                (m.direction === this.state.selectedDir || m.direction === 'both')
+            );
+            if (existing) {
+                sel.value = existing.name;
+                this.toast('Already exists — selected', 'info');
+                this.updateConfirmBtn();
+                return;
+            }
+            const res = await this.supabase('materials', 'POST', {
+                name: trimmed, direction: this.state.selectedDir, sort_order: 500,
+            });
+            if (res && res.length) {
+                this.toast('✓ Material added', 'success');
+                await this.loadMaterials();
+                document.getElementById('modalMaterial').value = trimmed;
+            } else {
+                sel.value = '';
+                this.toast('Failed to add', 'error');
+            }
+        }
+        this.updateConfirmBtn();
+    },
+
+    updateConfirmBtn() {
+        const mat = document.getElementById('modalMaterial').value.trim();
+        const car = document.getElementById('modalCarrier').value.trim();
+        const validMat = mat && mat !== ADD_NEW_MATERIAL;
+        const dmxRequiresCustomer = isDmxCarrier(car) && !this.state.selectedCustomerId;
+        const dmxRequiresTripType = isDmxCarrier(car) && this.state.selectedCustomerId && !this.state.selectedTripType;
+        document.getElementById('confirmBook').disabled =
+            !(this.state.selectedDir && validMat && car) || dmxRequiresCustomer || dmxRequiresTripType;
+    },
+
+    async confirmBooking() {
+        const btn = document.getElementById('confirmBook');
+        btn.disabled = true;
+        btn.textContent = 'Booking…';
+        const trip = this.state.selectedTripType; // null if not DMX
+        const base = {
+            time:           this.state.selectedSlot,
+            direction:      this.state.selectedDir,
+            material:       document.getElementById('modalMaterial').value.trim(),
+            carrier:        document.getElementById('modalCarrier').value.trim(),
+            customer_id:    this.state.selectedCustomerId || null,
+            bol_number:     document.getElementById('modalBOL').value.trim() || null,
+            release_number: document.getElementById('modalRelease').value.trim() || null,
+            po_number:      document.getElementById('modalPO').value.trim() || null,
+            truck_id:       document.getElementById('modalTruck').value.trim() || null,
+            trailer_id:     document.getElementById('modalTrailer').value.trim() || null,
+            notes:          document.getElementById('modalNotes').value.trim() || null,
+            status:         'booked',
+            trip_type:      trip || null,
+        };
+
+        try {
+            if (trip === 'swap') {
+                await this._bookSwap(base);
+            } else if (trip === 'round_trip') {
+                await this._bookRoundTrip(base);
+            } else {
+                await this._bookSimple(base);
+            }
+
+            // Auto-register carrier if new
+            const carName = base.carrier;
+            if (carName && !this.state.carriers.find(c => c.name.toLowerCase() === carName.toLowerCase())) {
+                await this.supabase('carriers', 'POST', { name: carName, sort_order: 500 });
+                this.loadCarriers();
+            }
+        } catch (e) {
+            console.error('[confirmBooking]', e);
+            this.toast(e.message || 'Booking failed', 'error');
+        }
+        btn.disabled = false;
+        btn.textContent = 'Confirm Booking';
+    },
+
+    async _bookSimple(base) {
+        base.booking_hash = await this.generateBookingHash(base);
+        const res = await this.supabase('schedule', 'POST', base);
+        if (res && res.length) {
+            this.toast('✓ Booking confirmed', 'success');
+            this.closeBookModal();
+            await this.loadSchedule();
+        } else {
+            this.toast('Slot may already be taken', 'error');
+            await this.loadSchedule();
+        }
+    },
+
+    async _bookRoundTrip(base) {
+        const pickupMat = document.getElementById('modalRoundMat').value.trim();
+        if (!pickupMat) { throw new Error('Return material required'); }
+        base.pickup_material = pickupMat;
+        base.booking_hash = await this.generateBookingHash(base);
+        const res = await this.supabase('schedule', 'POST', base);
+        if (res && res.length) {
+            this.toast('✓ Round trip booked', 'success');
+            this.closeBookModal();
+            await this.loadSchedule();
+        } else {
+            this.toast('Slot may already be taken', 'error');
+            await this.loadSchedule();
+        }
+    },
+
+    async _bookSwap(base) {
+        // SWAP = two linked bookings at the same time slot
+        const dropTrailer = document.getElementById('modalDropTrlr').value;
+        const pickTrailer = document.getElementById('modalPickTrlr').value;
+        const pickupMat   = document.getElementById('modalPickMat').value.trim();
+        const manualTrailer = base.trailer_id;
+        const dropTrlr = dropTrailer === '__OTHER__' ? manualTrailer : dropTrailer;
+        const pickTrlr = pickTrailer === '__OTHER__' ? manualTrailer : pickTrailer;
+        if (!dropTrlr)   { throw new Error('Drop trailer required'); }
+        if (!pickTrlr)   { throw new Error('Pickup trailer required'); }
+        if (!pickupMat)  { throw new Error('Return material required'); }
+        if (dropTrlr.toLowerCase() === pickTrlr.toLowerCase()) { throw new Error('Drop and pickup trailers must differ — use Round Trip if same trailer'); }
+
+        // OUTBOUND half (dropping pallets)
+        const outbound = {
+            ...base,
+            direction: 'outbound',
+            trip_type: 'swap',
+            drop_trailer_id: dropTrlr,
+            pickup_trailer_id: pickTrlr,
+            pickup_material: pickupMat,
+            trailer_id: dropTrlr,
+        };
+        outbound.booking_hash = await this.generateBookingHash(outbound);
+        const resOut = await this.supabase('schedule', 'POST', outbound);
+        if (!resOut || !resOut.length) { throw new Error('Could not create outbound half'); }
+        const outId = resOut[0].id;
+
+        // INBOUND half (bringing OCC back) - linked
+        const inbound = {
+            ...base,
+            direction: 'inbound',
+            material: pickupMat,
+            trip_type: 'swap',
+            drop_trailer_id: dropTrlr,
+            pickup_trailer_id: pickTrlr,
+            pickup_material: pickupMat,
+            trailer_id: pickTrlr,
+            linked_booking_id: outId,
+            bol_number: null,   // will be assigned on completion
+            release_number: null,
+        };
+        inbound.booking_hash = await this.generateBookingHash(inbound);
+        const resIn = await this.supabase('schedule', 'POST', inbound);
+        if (!resIn || !resIn.length) {
+            // Attempt to roll back outbound
+            await this.supabase(`schedule?id=eq.${outId}`, 'DELETE');
+            throw new Error('Could not create inbound half — rolled back');
+        }
+        // Back-link outbound to inbound too
+        await this.supabase(`schedule?id=eq.${outId}`, 'PATCH', { linked_booking_id: resIn[0].id });
+
+        this.toast('✓ Swap booked (drop + pickup)', 'success');
+        this.closeBookModal();
+        await this.loadSchedule();
+    },
+
+    detectArrivalType(scheduledTime, actualTime) {
+        const scheduled = new Date(scheduledTime).getTime();
+        const actual = new Date(actualTime).getTime();
+        const diffMin = Math.round((actual - scheduled) / 60000);
+        let type;
+        if (diffMin < -ON_TIME_WINDOW_MIN) type = 'early';
+        else if (diffMin > ON_TIME_WINDOW_MIN) type = 'late';
+        else type = 'on_time';
+        return { type, diffMin };
+    },
+
+    buildArrivalNote(type, diffMin, existingNotes) {
+        if (type === 'on_time') return existingNotes;
+        let addition;
+        if (type === 'late') addition = `Arrived ${diffMin} min late`;
+        else if (type === 'early') addition = `Arrived ${Math.abs(diffMin)} min early`;
+        if (!existingNotes || !existingNotes.trim()) return addition;
+        if (existingNotes.includes(addition)) return existingNotes;
+        return existingNotes + ' · ' + addition;
+    },
+
+    renderAttachmentThumb(url) {
+        if (!url) return '';
+        const safeUrl = this.esc(url);
+        if (isPdfUrl(url)) {
+            return `<a href="${safeUrl}" target="_blank" rel="noopener" class="pdf-thumb" title="Open PDF">
+                <div class="text-center leading-tight">
+                    <div style="font-size:1.1rem;">📄</div>
+                    <div>PDF</div>
+                </div>
+            </a>`;
+        }
+        if (isImageUrl(url)) {
+            return `<img src="${safeUrl}" class="bol-thumb w-14 h-14 rounded-lg border border-slate-600 object-cover cursor-pointer" data-photo="${safeUrl}" alt="BOL">`;
+        }
+        const ext = fileExt(url.split('?')[0]).toUpperCase().slice(0, 4);
+        return `<a href="${safeUrl}" target="_blank" rel="noopener" class="doc-thumb" title="Open file">
+            <div class="text-center leading-tight">
+                <div style="font-size:1.1rem;">📎</div>
+                <div>${this.esc(ext)}</div>
+            </div>
+        </a>`;
+    },
+
+    // ─── DASHBOARD ──────────────────────────────────────────
+    renderDashboard() {
+        const today = this.state.activeDate;
+        const rows = this.state.schedule.filter(r => r.time.slice(0,10) === today)
+            .sort((a,b) => new Date(a.time) - new Date(b.time));
+        let ob=0, ib=0, arrived=0, done=0;
+        rows.forEach(r => {
+            if (r.status === 'cancelled' || r.status === 'no_show') return;
+            if (r.direction === 'outbound') ob++; else ib++;
+            if (r.status === 'arrived') arrived++;
+            if (r.status === 'completed') done++;
+        });
+        document.getElementById('statOB').textContent = ob;
+        document.getElementById('statIB').textContent = ib;
+        document.getElementById('statArrived').textContent = arrived;
+        document.getElementById('statDone').textContent = done;
+        document.getElementById('dashSubtitle').textContent = this.state.adminUnlocked
+            ? '✏️ Admin mode — tap Edit on any booking'
+            : 'Mark trucks as arrived or completed.';
+
+        const list = document.getElementById('dashList');
+        const empty = document.getElementById('dashEmpty');
+        if (!rows.length) { list.innerHTML=''; empty.classList.remove('hidden'); return; }
+        empty.classList.add('hidden');
+
+        list.innerHTML = rows.map(r => {
+            const t = new Date(r.time);
+            const hourLabel = this.formatHour(t.getHours());
+            const hourEnd = this.formatHour(t.getHours() + 1);
+            const dirColor = r.direction === 'outbound' ? 'bg-ob-500' : 'bg-ib-500';
+            const dirText  = r.direction === 'outbound' ? 'text-ob-500' : 'text-ib-500';
+            const dirLabel = r.direction === 'outbound' ? 'OUTBOUND' : 'INBOUND';
+            let statusBadge, actionBtns;
+            if (r.status === 'booked') {
+                statusBadge = '<span class="px-2 py-0.5 rounded-full bg-slate-700 text-slate-300 text-xs font-semibold">BOOKED</span>';
+                actionBtns = `
+                    <button class="act-btn px-3 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold" data-id="${r.id}" data-action="arrived">Mark Arrived</button>
+                    <button class="act-btn px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold" data-id="${r.id}" data-action="cancelled">Cancel</button>`;
+            } else if (r.status === 'arrived') {
+                let badgeColor = 'bg-amber-600';
+                let badgeIcon = 'ON SITE';
+                if (r.arrival_type === 'late') { badgeColor = 'bg-red-600'; badgeIcon = '⏩ LATE'; }
+                else if (r.arrival_type === 'early') { badgeColor = 'bg-blue-600'; badgeIcon = '⏪ EARLY'; }
+                else if (r.arrival_type === 'on_time') { badgeColor = 'bg-ob-600'; badgeIcon = '✓ ON TIME'; }
+                statusBadge = `<span class="px-2 py-0.5 rounded-full ${badgeColor} text-white text-xs font-bold pulse-dot">${badgeIcon}</span>`;
+                actionBtns = `
+                    <button class="act-btn px-3 py-2 rounded-lg bg-ob-600 hover:bg-ob-700 text-white text-xs font-bold" data-id="${r.id}" data-action="complete">Mark Complete</button>
+                    <button class="act-btn px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold" data-id="${r.id}" data-action="booked">Undo</button>`;
+            } else if (r.status === 'completed') {
+                let label = 'COMPLETED';
+                if (r.arrival_type === 'late') label = 'DONE · LATE';
+                else if (r.arrival_type === 'early') label = 'DONE · EARLY';
+                else if (r.arrival_type === 'on_time') label = 'DONE · ON TIME';
+                statusBadge = `<span class="px-2 py-0.5 rounded-full bg-ob-700 text-white text-xs font-bold">${label}</span>`;
+                actionBtns = `<button class="act-btn px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold" data-id="${r.id}" data-action="complete">Edit BOL</button>
+                              <button class="act-btn px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold" data-id="${r.id}" data-action="arrived">Reopen</button>`;
+            } else {
+                statusBadge = `<span class="px-2 py-0.5 rounded-full bg-red-900/50 text-red-300 text-xs font-semibold">${r.status.toUpperCase()}</span>`;
+                actionBtns = `<button class="act-btn px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold" data-id="${r.id}" data-action="booked">Restore</button>`;
+            }
+            const bolBits = [];
+            if (r.bol_number)     bolBits.push(`<span class="copyable" data-copy="${this.esc(r.bol_number)}" title="Tap to copy">📋 BOL ${this.esc(r.bol_number)}</span>`);
+            if (r.release_number) bolBits.push(`<span class="copyable" data-copy="${this.esc(r.release_number)}" title="Tap to copy">Rel ${this.esc(r.release_number)}</span>`);
+            if (r.po_number)      bolBits.push(`<span class="copyable" data-copy="${this.esc(r.po_number)}" title="Tap to copy">PO ${this.esc(r.po_number)}</span>`);
+            if (r.truck_id)       bolBits.push(`Truck ${this.esc(r.truck_id)}`);
+            if (r.trailer_id)     bolBits.push(`Trlr ${this.esc(r.trailer_id)}`);
+            const bolLine = bolBits.length ? `<div class="text-xs text-slate-500 mt-1 font-mono flex gap-3 flex-wrap">${bolBits.join('<span class="text-slate-700">·</span>')}</div>` : '';
+            const attachment = this.renderAttachmentThumb(r.bol_photo_url);
+            const editBadge = this.state.adminUnlocked
+                ? `<button class="edit-booking-btn text-xs text-slate-500 hover:text-ob-500" data-id="${r.id}">✏️ Edit</button>`
+                : '';
+            const customer = this.customerById(r.customer_id);
+            const custLine = customer
+                ? `<div class="text-xs text-slate-400 mt-0.5">→ <span class="font-semibold">${this.esc(customer.display_name || customer.name)}</span>${customer.billing_city || customer.shipping_city ? ` <span class="text-slate-500">(${this.esc(customer.shipping_city || customer.billing_city)})</span>` : ''}</div>`
+                : '';
+            return `
+            <div class="bg-slate-800 rounded-lg p-4 border border-slate-700 flex items-center gap-4 flex-wrap">
+                <div class="w-1.5 h-14 rounded-full ${dirColor}"></div>
+                <div class="min-w-[110px]">
+                    <div class="font-mono font-bold text-lg">${hourLabel}</div>
+                    <div class="text-xs text-slate-500">to ${hourEnd}</div>
+                </div>
+                <div class="flex-1 min-w-[180px]">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="font-bold ${dirText} text-xs">${dirLabel}</span>
+                        ${statusBadge}
+                        ${editBadge}
+                    </div>
+                    <div class="font-semibold mt-1">${this.esc(r.carrier)}</div>
+                    <div class="text-sm text-slate-400">${this.esc(r.material)}</div>
+                    ${custLine}
+                    ${bolLine}
+                    ${r.notes ? `<div class="text-xs text-slate-500 mt-1 italic">"${this.esc(r.notes)}"</div>` : ''}
+                </div>
+                ${attachment}
+                <div class="flex gap-2 flex-wrap">${actionBtns}</div>
+            </div>`;
+        }).join('');
+
+        list.querySelectorAll('.act-btn').forEach(b => {
+            b.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const id = b.dataset.id, action = b.dataset.action;
+                if (action === 'complete') this.openCompleteModal(id);
+                else this.updateStatus(id, action);
+            });
+        });
+        list.querySelectorAll('.edit-booking-btn').forEach(b => {
+            b.addEventListener('click', e => { e.stopPropagation(); this.openEditModal(b.dataset.id); });
+        });
+        list.querySelectorAll('[data-photo]').forEach(img => {
+            img.addEventListener('click', e => {
+                e.stopPropagation();
+                document.getElementById('photoViewerImg').src = img.dataset.photo;
+                document.getElementById('photoViewer').classList.remove('hidden');
+            });
+        });
+        list.querySelectorAll('.copyable').forEach(el => {
+            el.addEventListener('click', e => {
+                e.stopPropagation();
+                const val = el.dataset.copy;
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(val).then(() => this.toast(`Copied: ${val}`, 'success'));
+                } else {
+                    this.toast(`Copy: ${val}`, 'info');
+                }
+            });
+        });
+        document.getElementById('lastRefresh').textContent = 'Updated ' + new Date().toLocaleTimeString();
+    },
+
+    async updateStatus(id, newStatus) {
+        const booking = this.state.schedule.find(r => String(r.id) === String(id));
+        if (!booking) return;
+        const patch = { status: newStatus };
+        if (newStatus === 'arrived') {
+            const now = new Date().toISOString();
+            patch.arrived_at = now;
+            const { type, diffMin } = this.detectArrivalType(booking.time, now);
+            patch.arrival_type = type;
+            const newNote = this.buildArrivalNote(type, diffMin, booking.notes);
+            if (newNote !== booking.notes) patch.notes = newNote;
+        }
+        if (newStatus === 'booked') {
+            patch.arrived_at = null;
+            patch.completed_at = null;
+            patch.arrival_type = null;
+        }
+        const res = await this.supabase(`schedule?id=eq.${id}`, 'PATCH', patch);
+        if (res) {
+            if (newStatus === 'arrived' && patch.arrival_type) {
+                const label = patch.arrival_type === 'late' ? '⏩ Late' : patch.arrival_type === 'early' ? '⏪ Early' : '✓ On Time';
+                this.toast(`Arrived — ${label}`, 'success');
+            } else {
+                this.toast(`Status → ${newStatus.toUpperCase()}`, 'success');
+            }
+            await this.loadSchedule();
+        }
+    },
+
+    // ─── 🚚 ROUTES TAB ──────────────────────────────────────
+    async renderRoutes() {
+        // Fetch bookings for the routes date, filter to DMX carrier only
+        const d = new Date(this.state.routesDate + 'T00:00:00');
+        const from = new Date(d); from.setHours(0, 0, 0, 0);
+        const to   = new Date(d); to.setDate(d.getDate() + 1);
+
+        const rows = await this.supabase(`schedule?time=gte.${from.toISOString()}&time=lt.${to.toISOString()}&order=time.asc,route_sequence.asc`);
+        let dmxRows = (rows || []).filter(r => isDmxCarrier(r.carrier) && r.status !== 'cancelled' && r.status !== 'no_show');
+
+        // V3.1: Collapse swap pairs — only show the outbound half of a swap
+        // (the inbound half is linked, same customer, same time slot — showing both would be a duplicate stop)
+        dmxRows = dmxRows.filter(r => !(r.trip_type === 'swap' && r.direction === 'inbound'));
+
+        // Sort: use route_sequence if set, else time
+        dmxRows.sort((a, b) => {
+            if (a.route_sequence != null && b.route_sequence != null) return a.route_sequence - b.route_sequence;
+            return new Date(a.time) - new Date(b.time);
+        });
+
+        const total = dmxRows.length;
+        const done = dmxRows.filter(r => r.status === 'completed').length;
+        document.getElementById('routeStatTotal').textContent = total;
+        document.getElementById('routeStatDone').textContent = done;
+        document.getElementById('routeStatRemain').textContent = total - done;
+        document.getElementById('routesSubtitle').textContent = `${new Date(this.state.routesDate).toLocaleDateString(undefined, {weekday:'long', month:'short', day:'numeric'})}`;
+
+        const list = document.getElementById('routeList');
+        const empty = document.getElementById('routeEmpty');
+        if (!dmxRows.length) { list.innerHTML = ''; empty.classList.remove('hidden'); return; }
+        empty.classList.add('hidden');
+
+        list.innerHTML = dmxRows.map((r, idx) => this.renderRouteCard(r, idx + 1)).join('');
+
+        // Bind handlers
+        list.querySelectorAll('.route-act').forEach(b => {
+            b.addEventListener('click', e => {
+                e.stopPropagation();
+                const id = b.dataset.id, action = b.dataset.action;
+                if (action === 'complete') this.openCompleteModal(id);
+                else this.updateStatus(id, action);
+            });
+        });
+    },
+
+    renderRouteCard(r, stopNum) {
+        const t = new Date(r.time);
+        const hourLabel = this.formatHour(t.getHours());
+        const customer = this.customerById(r.customer_id);
+
+        // V3.1: determine badge from trip_type, fallback to direction
+        let tripBadge = '';
+        let tripDetail = '';
+        const trip = r.trip_type;
+        if (trip === 'swap') {
+            tripBadge = '<span class="route-badge-swap px-2 py-0.5 rounded text-xs font-bold">🔁 SWAP</span>';
+            const dropT = r.drop_trailer_id || '?';
+            const pickT = r.pickup_trailer_id || '?';
+            tripDetail = `<div class="mt-2 p-2 rounded bg-amber-900/20 border border-amber-900 text-xs">
+                <div><strong>Drop:</strong> Trailer <span class="font-mono font-bold">${this.esc(dropT)}</span> (${this.esc(r.material)})</div>
+                <div><strong>Pick up:</strong> Trailer <span class="font-mono font-bold">${this.esc(pickT)}</span>${r.pickup_material ? ` (${this.esc(r.pickup_material)})` : ''}</div>
+            </div>`;
+        } else if (trip === 'round_trip') {
+            tripBadge = '<span class="route-badge-swap px-2 py-0.5 rounded text-xs font-bold" style="background:#3b82f6;">🔄 ROUND TRIP</span>';
+            tripDetail = `<div class="mt-2 p-2 rounded bg-blue-900/20 border border-blue-900 text-xs">
+                <div><strong>Drop:</strong> ${this.esc(r.material)}${r.trailer_id ? ` (Trlr <span class="font-mono">${this.esc(r.trailer_id)}</span>)` : ''}</div>
+                <div><strong>Pick up:</strong> ${this.esc(r.pickup_material || 'OCC')} (same trailer, driver waits)</div>
+            </div>`;
+        } else if (trip === 'pickup') {
+            tripBadge = '<span class="route-badge-pickup px-2 py-0.5 rounded text-xs font-bold">🟢 PICKUP</span>';
+        } else if (trip === 'delivery') {
+            tripBadge = '<span class="route-badge-drop px-2 py-0.5 rounded text-xs font-bold">🔵 DROP</span>';
+        } else {
+            // Legacy fallback — infer from direction
+            tripBadge = r.direction === 'outbound'
+                ? '<span class="route-badge-drop px-2 py-0.5 rounded text-xs font-bold">🔵 DROP</span>'
+                : '<span class="route-badge-pickup px-2 py-0.5 rounded text-xs font-bold">🟢 PICKUP</span>';
+        }
+
+        let statusBadge = '';
+        let actionBtns = '';
+        if (r.status === 'booked') {
+            statusBadge = '<span class="px-2 py-0.5 rounded bg-slate-700 text-slate-300 text-xs font-semibold">BOOKED</span>';
+            actionBtns = `<button class="route-act flex-1 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold" data-id="${r.id}" data-action="arrived">Start Stop</button>`;
+        } else if (r.status === 'arrived') {
+            statusBadge = '<span class="px-2 py-0.5 rounded bg-amber-600 text-white text-xs font-bold pulse-dot">ON SITE</span>';
+            actionBtns = `<button class="route-act flex-1 py-2.5 rounded-lg bg-ob-600 hover:bg-ob-700 text-white text-sm font-bold" data-id="${r.id}" data-action="complete">Complete Stop</button>`;
+        } else if (r.status === 'completed') {
+            statusBadge = '<span class="px-2 py-0.5 rounded bg-ob-700 text-white text-xs font-bold">✓ DONE</span>';
+            actionBtns = `<button class="route-act flex-1 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-semibold" data-id="${r.id}" data-action="arrived">Reopen</button>`;
+        }
+
+        // Customer details
+        let custBlock;
+        if (!customer) {
+            custBlock = `<div class="text-sm text-slate-500 italic mt-2">No customer linked · <span class="text-ob-500">Edit booking to add one</span></div>`;
+        } else {
+            const addr = this.customerShipAddress(customer);
+            const mapsUrl = addr ? `https://maps.apple.com/?q=${encodeURIComponent(addr)}` : null;
+            custBlock = `
+                <div class="mt-3 space-y-2">
+                    <div class="text-lg font-bold">${this.esc(customer.display_name || customer.name)}</div>
+                    ${customer.company && customer.company !== customer.name ? `<div class="text-xs text-slate-500 -mt-1">${this.esc(customer.company)}</div>` : ''}
+                    ${addr ? `<a href="${mapsUrl}" target="_blank" rel="noopener" class="block text-sm text-blue-400 font-semibold">📍 ${this.esc(addr)}</a>` : '<div class="text-xs text-red-400">⚠️ No shipping address on file</div>'}
+                    ${customer.phone ? `<a href="tel:${this.esc(customer.phone)}" class="inline-block text-sm text-ob-500 font-semibold">📞 ${this.esc(customer.phone)}</a>` : ''}
+                    ${customer.contact_name ? `<div class="text-xs text-slate-400">Contact: ${this.esc(customer.contact_name)}</div>` : ''}
+                    ${customer.gate_hours ? `<div class="gate-hours-pill inline-block px-2 py-1 rounded text-xs font-semibold">🕐 ${this.esc(customer.gate_hours)}</div>` : ''}
+                    ${customer.requires_appointment ? `<div class="text-xs text-amber-400">📅 APPOINTMENT REQUIRED${customer.appointment_contact ? ': ' + this.esc(customer.appointment_contact) : ''}</div>` : ''}
+                    ${customer.special_instructions ? `<div class="instr-highlight p-2 rounded text-xs text-amber-200"><strong>⚡ Special Instructions:</strong><br>${this.esc(customer.special_instructions)}</div>` : ''}
+                </div>`;
+        }
+
+        const bolBits = [];
+        if (r.bol_number)  bolBits.push(`<span class="copyable" data-copy="${this.esc(r.bol_number)}">📋 BOL ${this.esc(r.bol_number)}</span>`);
+        if (r.release_number) bolBits.push(`<span class="copyable" data-copy="${this.esc(r.release_number)}">Rel ${this.esc(r.release_number)}</span>`);
+        if (r.trailer_id && !trip)  bolBits.push(`Trlr ${this.esc(r.trailer_id)}`);
+        const bolLine = bolBits.length ? `<div class="text-xs text-slate-500 mt-2 font-mono flex gap-2 flex-wrap">${bolBits.join('<span class="text-slate-700">·</span>')}</div>` : '';
+
+        const materialLine = trip === 'swap' || trip === 'round_trip'
+            ? '' // material shown in tripDetail block
+            : `<div class="mt-2 text-sm text-slate-400">Material: <span class="font-semibold text-slate-200">${this.esc(r.material)}</span></div>`;
+
+        return `
+        <div class="route-card bg-slate-800 rounded-xl p-4 border-2 border-slate-700">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+                <div class="flex items-center gap-2">
+                    <span class="w-7 h-7 rounded-full bg-slate-900 flex items-center justify-center font-bold text-sm">${stopNum}</span>
+                    <span class="font-mono font-bold text-lg">${hourLabel}</span>
+                    ${tripBadge}
+                    ${statusBadge}
+                </div>
+            </div>
+            ${materialLine}
+            ${tripDetail}
+            ${custBlock}
+            ${bolLine}
+            ${r.notes ? `<div class="text-xs text-slate-500 mt-2 italic">"${this.esc(r.notes)}"</div>` : ''}
+            <div class="flex gap-2 mt-3">${actionBtns}</div>
+        </div>`;
+    },
+
+    // ─── COMPLETE MODAL ─────────────────────────────────────
+    openCompleteModal(bookingId) {
+        const booking = this.state.schedule.find(r => String(r.id) === String(bookingId));
+        if (!booking) return;
+        this.state.completingBooking = booking;
+        this.state.pendingBolPhoto = null;
+        const customer = this.customerById(booking.customer_id);
+        const custTag = customer ? ` → ${customer.display_name || customer.name}` : '';
+        document.getElementById('completeModalSummary').textContent = `${booking.carrier} · ${booking.material}${custTag}`;
+        document.getElementById('completeBOL').value = booking.bol_number || '';
+        document.getElementById('completeRelease').value = booking.release_number || '';
+        document.getElementById('completeTruck').value = booking.truck_id || '';
+        document.getElementById('completeTrailer').value = booking.trailer_id || '';
+        const preview = document.getElementById('bolPhotoPreview');
+        const content = document.getElementById('bolPreviewContent');
+        if (booking.bol_photo_url) {
+            content.innerHTML = this.renderPreviewContent(booking.bol_photo_url, null);
+            preview.classList.remove('hidden');
+        } else {
+            preview.classList.add('hidden');
+        }
+        document.getElementById('bolUploadProgress').classList.add('hidden');
+        document.getElementById('bolCameraInput').value = '';
+        document.getElementById('bolLibraryInput').value = '';
+        document.getElementById('completeModal').classList.remove('hidden');
+    },
+
+    renderPreviewContent(url, file) {
+        if (file) {
+            if (isImageFile(file)) {
+                const blobUrl = URL.createObjectURL(file);
+                return `<img src="${blobUrl}" class="w-full rounded-lg border border-slate-700 max-h-64 object-contain bg-slate-950" alt="preview">`;
+            }
+            if (isPdfFile(file)) {
+                return `<div class="w-full rounded-lg border border-slate-700 bg-slate-950 p-6 text-center">
+                    <div class="text-5xl mb-2">📄</div>
+                    <div class="font-bold text-red-400">PDF Attached</div>
+                    <div class="text-xs text-slate-400 mt-1 font-mono truncate">${this.esc(file.name)}</div>
+                    <div class="text-xs text-slate-500 mt-1">${this.formatBytes(file.size)}</div>
+                </div>`;
+            }
+            return `<div class="w-full rounded-lg border border-slate-700 bg-slate-950 p-6 text-center">
+                <div class="text-5xl mb-2">📎</div>
+                <div class="font-bold text-blue-400">${this.esc(fileExt(file.name).toUpperCase())} File</div>
+                <div class="text-xs text-slate-400 mt-1 font-mono truncate">${this.esc(file.name)}</div>
+                <div class="text-xs text-slate-500 mt-1">${this.formatBytes(file.size)}</div>
+            </div>`;
+        }
+        const safeUrl = this.esc(url);
+        if (isPdfUrl(url)) {
+            return `<a href="${safeUrl}" target="_blank" rel="noopener" class="block w-full rounded-lg border border-slate-700 bg-slate-950 p-6 text-center hover:bg-slate-900">
+                <div class="text-5xl mb-2">📄</div>
+                <div class="font-bold text-red-400">PDF Attached</div>
+                <div class="text-xs text-slate-400 mt-1">Tap to open</div>
+            </a>`;
+        }
+        if (isImageUrl(url)) {
+            return `<img src="${safeUrl}" class="w-full rounded-lg border border-slate-700 max-h-64 object-contain bg-slate-950" alt="BOL">`;
+        }
+        return `<a href="${safeUrl}" target="_blank" rel="noopener" class="block w-full rounded-lg border border-slate-700 bg-slate-950 p-6 text-center hover:bg-slate-900">
+            <div class="text-5xl mb-2">📎</div>
+            <div class="font-bold text-blue-400">File Attached</div>
+            <div class="text-xs text-slate-400 mt-1">Tap to open</div>
+        </a>`;
+    },
+
+    closeCompleteModal() {
+        document.getElementById('completeModal').classList.add('hidden');
+        this.state.completingBooking = null;
+        this.state.pendingBolPhoto = null;
+    },
+
+    handleBolPhotoSelect(file) {
+        if (!file) return;
+        const content = document.getElementById('bolPreviewContent');
+        content.innerHTML = this.renderPreviewContent(null, file);
+        document.getElementById('bolPhotoPreview').classList.remove('hidden');
+        this.state.pendingBolPhoto = { file };
+    },
+
+    removeBolPhoto() {
+        this.state.pendingBolPhoto = null;
+        document.getElementById('bolCameraInput').value = '';
+        document.getElementById('bolLibraryInput').value = '';
+        document.getElementById('bolPhotoPreview').classList.add('hidden');
+        if (this.state.completingBooking) {
+            this.state.completingBooking.bol_photo_url = null;
+            this.state.completingBooking.bol_photo_path = null;
+        }
+    },
+
+    async confirmComplete() {
+        const booking = this.state.completingBooking;
+        if (!booking) return;
+        const btn = document.getElementById('confirmComplete');
+        btn.disabled = true;
+        btn.textContent = 'Saving…';
+        const patch = {
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+            bol_number: document.getElementById('completeBOL').value.trim() || null,
+            release_number: document.getElementById('completeRelease').value.trim() || null,
+            truck_id: document.getElementById('completeTruck').value.trim() || null,
+            trailer_id: document.getElementById('completeTrailer').value.trim() || null,
+        };
+        if (!booking.arrival_type && booking.status !== 'arrived') {
+            const { type } = this.detectArrivalType(booking.time, patch.completed_at);
+            patch.arrival_type = type;
+            patch.arrived_at = booking.arrived_at || patch.completed_at;
+        }
+        if (this.state.pendingBolPhoto) {
+            document.getElementById('bolUploadProgress').classList.remove('hidden');
+            const up = await this.uploadBolFile(this.state.pendingBolPhoto.file, booking.id);
+            document.getElementById('bolUploadProgress').classList.add('hidden');
+            if (up) { patch.bol_photo_url = up.publicUrl; patch.bol_photo_path = up.path; }
+        } else if (booking.bol_photo_url === null || booking.bol_photo_url === undefined) {
+            patch.bol_photo_url = null;
+            patch.bol_photo_path = null;
+        }
+        const res = await this.supabase(`schedule?id=eq.${booking.id}`, 'PATCH', patch);
+        btn.disabled = false;
+        btn.textContent = 'Mark Complete';
+        if (res) {
+            // V3.1: Auto-update trailer location based on trip type
+            const updatedBooking = { ...booking, ...patch };
+            await this.applyTrailerLocationChange(updatedBooking);
+            await this.loadTrailers();
+            this.toast('✓ Load completed', 'success');
+            this.closeCompleteModal();
+            await this.loadSchedule();
+        }
+    },
+
+    // ─── EDIT BOOKING ───────────────────────────────────────
+    openEditModal(bookingId) {
+        if (!this.state.adminUnlocked) { this.toast('Unlock admin first', 'error'); return; }
+        const booking = this.state.schedule.find(r => String(r.id) === String(bookingId));
+        if (!booking) return;
+        this.state.editingBooking = booking;
+        this.state.editingDir = booking.direction;
+        document.getElementById('editModalId').textContent = `ID: ${booking.id} · Created ${new Date(booking.created_at).toLocaleString()}`;
+        const t = new Date(booking.time);
+        document.getElementById('editDate').value = booking.time.slice(0, 10);
+        this.populateHourOptions(t.getHours());
+        document.getElementById('editHour').value = t.getHours();
+        document.querySelectorAll('.edit-dir-btn').forEach(b => {
+            b.classList.remove('border-ob-500', 'border-ib-500', 'bg-ob-900/30', 'bg-ib-900/30');
+            if (b.dataset.dir === booking.direction) {
+                if (booking.direction === 'outbound') b.classList.add('border-ob-500', 'bg-ob-900/30');
+                else b.classList.add('border-ib-500', 'bg-ib-900/30');
+            }
+        });
+        this.renderEditMaterialDropdown();
+        this.renderEditCustomerDropdown();
+        document.getElementById('editCustomer').value = booking.customer_id || '';
+        document.getElementById('editCarrier').value = booking.carrier || '';
+        document.getElementById('editBOL').value = booking.bol_number || '';
+        document.getElementById('editRelease').value = booking.release_number || '';
+        document.getElementById('editPO').value = booking.po_number || '';
+        document.getElementById('editTruck').value = booking.truck_id || '';
+        document.getElementById('editTrailer').value = booking.trailer_id || '';
+        document.getElementById('editStatus').value = booking.status;
+        document.getElementById('editArrivalType').value = booking.arrival_type || '';
+        document.getElementById('editNotes').value = booking.notes || '';
+        document.getElementById('editModal').classList.remove('hidden');
+    },
+
+    renderEditMaterialDropdown() {
+        const sel = document.getElementById('editMaterial');
+        if (!this.state.editingDir) { sel.innerHTML = '<option value="">-- Select direction --</option>'; return; }
+        const items = this.state.materials.filter(m =>
+            m.active && (m.direction === this.state.editingDir || m.direction === 'both')
+        );
+        const current = this.state.editingBooking ? this.state.editingBooking.material : '';
+        const hasCurrent = items.some(m => m.name === current);
+        let html = '<option value="">-- Select material --</option>' +
+            items.map(m => `<option value="${this.esc(m.name)}">${this.esc(m.name)}</option>`).join('');
+        if (current && !hasCurrent) html += `<option value="${this.esc(current)}">${this.esc(current)} (archived)</option>`;
+        sel.innerHTML = html;
+        sel.value = current;
+    },
+
+    renderEditCustomerDropdown() {
+        const sel = document.getElementById('editCustomer');
+        const customers = this.state.customers.filter(c => c.active)
+            .sort((a, b) => (a.display_name || a.name).localeCompare(b.display_name || b.name));
+        sel.innerHTML = '<option value="">— None —</option>' +
+            customers.map(c => {
+                const city = c.shipping_city || c.billing_city;
+                return `<option value="${c.id}">${this.esc(c.display_name || c.name)}${city ? ` (${this.esc(city)})` : ''}</option>`;
+            }).join('');
+    },
+
+    populateHourOptions(selected) {
+        let html = '';
+        for (let h = this.state.startHour; h < this.state.endHour; h++) {
+            html += `<option value="${h}" ${h===selected?'selected':''}>${this.formatHour(h)} – ${this.formatHour(h+1)}</option>`;
+        }
+        document.getElementById('editHour').innerHTML = html;
+    },
+
+    closeEditModal() {
+        document.getElementById('editModal').classList.add('hidden');
+        this.state.editingBooking = null;
+        this.state.editingDir = null;
+    },
+
+    selectEditDirection(dir) {
+        this.state.editingDir = dir;
+        document.querySelectorAll('.edit-dir-btn').forEach(b => {
+            b.classList.remove('border-ob-500', 'border-ib-500', 'bg-ob-900/30', 'bg-ib-900/30');
+            if (b.dataset.dir === dir) {
+                if (dir === 'outbound') b.classList.add('border-ob-500', 'bg-ob-900/30');
+                else b.classList.add('border-ib-500', 'bg-ib-900/30');
+            }
+        });
+        this.renderEditMaterialDropdown();
+    },
+
+    async saveEdit() {
+        const booking = this.state.editingBooking;
+        if (!booking) return;
+        const date = document.getElementById('editDate').value;
+        const hour = parseInt(document.getElementById('editHour').value, 10);
+        const newTime = this.localIsoForHour(date, hour);
+        if (newTime !== booking.time) {
+            const collision = this.state.schedule.find(r =>
+                String(r.id) !== String(booking.id) &&
+                new Date(r.time).getTime() === new Date(newTime).getTime() &&
+                r.status !== 'cancelled' && r.status !== 'no_show'
+            );
+            if (collision) {
+                if (!confirm(`⚠️ Slot already booked by "${collision.carrier}" (${collision.material}).\n\nMove anyway?`)) return;
+            }
+        }
+        const custVal = document.getElementById('editCustomer').value;
+        const patch = {
+            time: newTime,
+            direction: this.state.editingDir,
+            material: document.getElementById('editMaterial').value.trim(),
+            carrier: document.getElementById('editCarrier').value.trim(),
+            customer_id: custVal ? parseInt(custVal, 10) : null,
+            bol_number: document.getElementById('editBOL').value.trim() || null,
+            release_number: document.getElementById('editRelease').value.trim() || null,
+            po_number: document.getElementById('editPO').value.trim() || null,
+            truck_id: document.getElementById('editTruck').value.trim() || null,
+            trailer_id: document.getElementById('editTrailer').value.trim() || null,
+            status: document.getElementById('editStatus').value,
+            arrival_type: document.getElementById('editArrivalType').value || null,
+            notes: document.getElementById('editNotes').value.trim() || null,
+        };
+        if (!patch.material || !patch.carrier) { this.toast('Material and Carrier required', 'error'); return; }
+        const btn = document.getElementById('editSave');
+        btn.disabled = true;
+        btn.textContent = 'Saving…';
+        const res = await this.supabase(`schedule?id=eq.${booking.id}`, 'PATCH', patch);
+        btn.disabled = false;
+        btn.textContent = 'Save Changes';
+        if (res) {
+            this.toast('✓ Booking updated', 'success');
+            this.closeEditModal();
+            await this.loadSchedule();
+        }
+    },
+
+    async deleteBooking() {
+        const booking = this.state.editingBooking;
+        if (!booking) return;
+        if (!confirm(`⚠️ Delete this booking permanently?\n\n${booking.carrier} · ${booking.material}\n${new Date(booking.time).toLocaleString()}`)) return;
+        const res = await this.supabase(`schedule?id=eq.${booking.id}`, 'DELETE');
+        if (res !== null) {
+            this.toast('✓ Booking deleted', 'success');
+            this.closeEditModal();
+            await this.loadSchedule();
+        }
+    },
+
+    // ─── ADMIN ──────────────────────────────────────────────
+    trySubmitPin() {
+        const val = document.getElementById('pinInput').value.trim();
+        if (val === ADMIN_PIN) {
+            this.state.adminUnlocked = true;
+            document.getElementById('adminGate').classList.add('hidden');
+            document.getElementById('adminContent').classList.remove('hidden');
+            document.getElementById('pinError').classList.add('hidden');
+            document.getElementById('pinInput').value = '';
+            this.switchAdminSubtab(this.state.adminSubtab);
+        } else {
+            document.getElementById('pinError').classList.remove('hidden');
+            document.getElementById('pinInput').value = '';
+        }
+    },
+
+    lockAdmin() {
+        this.state.adminUnlocked = false;
+        document.getElementById('adminGate').classList.remove('hidden');
+        document.getElementById('adminContent').classList.add('hidden');
+    },
+
+    switchAdminSubtab(sub) {
+        this.state.adminSubtab = sub;
+        document.querySelectorAll('.admin-subtab').forEach(b => {
+            b.classList.remove('border-ob-500', 'text-slate-100');
+            b.classList.add('border-transparent', 'text-slate-400');
+            if (b.dataset.subtab === sub) {
+                b.classList.add('border-ob-500', 'text-slate-100');
+                b.classList.remove('border-transparent', 'text-slate-400');
+            }
+        });
+        document.querySelectorAll('.admin-subpanel').forEach(p => p.classList.add('hidden'));
+        if (sub === 'customers') { document.getElementById('adminCustomers').classList.remove('hidden'); this.renderCustomersAdmin(); }
+        if (sub === 'trailers')  { document.getElementById('adminTrailers').classList.remove('hidden');  this.renderTrailersAdmin(); }
+        if (sub === 'materials') { document.getElementById('adminMaterials').classList.remove('hidden'); this.renderMaterialsAdmin(); }
+        if (sub === 'carriers')  { document.getElementById('adminCarriers').classList.remove('hidden');  this.renderCarriersAdmin(); }
+        if (sub === 'scorecard') { document.getElementById('adminScorecard').classList.remove('hidden'); this.renderScorecard(); }
+    },
+
+    // ─── CUSTOMERS ADMIN ────────────────────────────────────
+    renderCustomersAdmin() {
+        const list = document.getElementById('custList');
+        const filter = this.state.custFilter;
+        const search = (this.state.custSearch || '').toLowerCase().trim();
+
+        let filtered = this.state.customers.slice();
+        // Apply filter
+        if (filter === 'active') filtered = filtered.filter(c => c.active);
+        else if (filter === 'pallet') filtered = filtered.filter(c => c.delivers_pallets);
+        else if (filter === 'occ') filtered = filtered.filter(c => c.picks_up_occ);
+        else if (filter === 'swap') filtered = filtered.filter(c => c.trailer_swap);
+        else if (filter === 'untagged') filtered = filtered.filter(c => !c.delivers_pallets && !c.picks_up_occ && !c.trailer_swap);
+        // Apply search
+        if (search) {
+            filtered = filtered.filter(c => {
+                const hay = [c.name, c.display_name, c.company, c.billing_city, c.shipping_city, c.contact_name, c.phone, c.email]
+                    .filter(Boolean).join(' ').toLowerCase();
+                return hay.includes(search);
+            });
+        }
+        // Sort
+        filtered.sort((a, b) => (a.display_name || a.name).localeCompare(b.display_name || b.name));
+
+        document.getElementById('custFilterSummary').textContent = `Showing ${filtered.length} of ${this.state.customers.length} customers`;
+
+        if (!filtered.length) { list.innerHTML = '<div class="text-center py-8 text-slate-500 text-sm">No matches.</div>'; return; }
+
+        list.innerHTML = filtered.map(c => {
+            const city = c.shipping_city || c.billing_city;
+            const state = c.shipping_state || c.billing_state;
+            const loc = [city, state].filter(Boolean).join(', ');
+            const badges = [];
+            if (c.delivers_pallets) badges.push('<span class="px-1.5 py-0.5 rounded bg-ob-900/50 text-ob-500 text-xs">📦 Pallet</span>');
+            if (c.picks_up_occ)     badges.push('<span class="px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-400 text-xs">♻️ OCC</span>');
+            if (c.trailer_swap)     badges.push('<span class="px-1.5 py-0.5 rounded bg-amber-900/50 text-amber-400 text-xs">🔄 Swap</span>');
+            return `
+            <div class="bg-slate-800 rounded-lg p-3 border border-slate-700 flex items-center gap-3 cursor-pointer hover:border-slate-600 ${c.active ? '' : 'inactive-row'}" data-cust-id="${c.id}">
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="font-semibold truncate">${this.esc(c.display_name || c.name)}</span>
+                        ${badges.join('')}
+                    </div>
+                    ${loc ? `<div class="text-xs text-slate-500 truncate">📍 ${this.esc(loc)}</div>` : ''}
+                    ${c.phone ? `<div class="text-xs text-slate-500 font-mono">${this.esc(c.phone)}</div>` : ''}
+                </div>
+                <div class="text-slate-500">→</div>
+            </div>`;
+        }).join('');
+
+        list.querySelectorAll('[data-cust-id]').forEach(el => {
+            el.addEventListener('click', () => this.openCustomerModal(el.dataset.custId));
+        });
+    },
+
+    openCustomerModal(id) {
+        let c;
+        if (id) {
+            c = this.customerById(id);
+            if (!c) return;
+            document.getElementById('customerModalTitle').textContent = '✏️ Edit Customer';
+            document.getElementById('customerModalId').textContent = `ID: ${c.id}${c.full_qb_name ? ' · QB: ' + c.full_qb_name : ''}`;
+            document.getElementById('custDelete').classList.remove('hidden');
+        } else {
+            c = {}; // new
+            document.getElementById('customerModalTitle').textContent = '➕ Add Customer';
+            document.getElementById('customerModalId').textContent = '';
+            document.getElementById('custDelete').classList.add('hidden');
+        }
+        this.state.editingCustomer = c;
+
+        document.getElementById('custName').value = c.name || '';
+        document.getElementById('custCompany').value = c.company || '';
+        document.getElementById('custFlagPallets').checked = !!c.delivers_pallets;
+        document.getElementById('custFlagOCC').checked = !!c.picks_up_occ;
+        document.getElementById('custFlagSwap').checked = !!c.trailer_swap;
+        document.getElementById('custShipStreet').value = c.shipping_address || '';
+        document.getElementById('custShipCity').value = c.shipping_city || '';
+        document.getElementById('custShipState').value = c.shipping_state || '';
+        document.getElementById('custShipZip').value = c.shipping_zip || '';
+        document.getElementById('custBillStreet').value = c.billing_address || '';
+        document.getElementById('custBillCity').value = c.billing_city || '';
+        document.getElementById('custBillState').value = c.billing_state || '';
+        document.getElementById('custBillZip').value = c.billing_zip || '';
+        document.getElementById('custContact').value = c.contact_name || '';
+        document.getElementById('custPhone').value = c.phone || '';
+        document.getElementById('custEmail').value = c.email || '';
+        document.getElementById('custGateHours').value = c.gate_hours || '';
+        document.getElementById('custPrefDay').value = c.preferred_day || '';
+        document.getElementById('custReqAppt').checked = !!c.requires_appointment;
+        document.getElementById('custApptContact').value = c.appointment_contact || '';
+        document.getElementById('custSpecialInstr').value = c.special_instructions || '';
+        document.getElementById('custNotes').value = c.notes || '';
+        document.getElementById('custActive').checked = c.active !== false;
+
+        document.getElementById('customerModal').classList.remove('hidden');
+    },
+
+    closeCustomerModal() {
+        document.getElementById('customerModal').classList.add('hidden');
+        this.state.editingCustomer = null;
+    },
+
+    custCopyBillToShip() {
+        document.getElementById('custShipStreet').value = document.getElementById('custBillStreet').value;
+        document.getElementById('custShipCity').value   = document.getElementById('custBillCity').value;
+        document.getElementById('custShipState').value  = document.getElementById('custBillState').value;
+        document.getElementById('custShipZip').value    = document.getElementById('custBillZip').value;
+        this.toast('✓ Copied billing → shipping', 'info');
+    },
+
+    async saveCustomer() {
+        const name = document.getElementById('custName').value.trim();
+        if (!name) { this.toast('Name required', 'error'); return; }
+        const payload = {
+            name,
+            company: document.getElementById('custCompany').value.trim() || null,
+            display_name: name,  // simplify: edit display_name same as name for user-added customers
+            delivers_pallets: document.getElementById('custFlagPallets').checked,
+            picks_up_occ:     document.getElementById('custFlagOCC').checked,
+            trailer_swap:     document.getElementById('custFlagSwap').checked,
+            shipping_address: document.getElementById('custShipStreet').value.trim() || null,
+            shipping_city:    document.getElementById('custShipCity').value.trim() || null,
+            shipping_state:   document.getElementById('custShipState').value.trim() || null,
+            shipping_zip:     document.getElementById('custShipZip').value.trim() || null,
+            billing_address:  document.getElementById('custBillStreet').value.trim() || null,
+            billing_city:     document.getElementById('custBillCity').value.trim() || null,
+            billing_state:    document.getElementById('custBillState').value.trim() || null,
+            billing_zip:      document.getElementById('custBillZip').value.trim() || null,
+            contact_name:     document.getElementById('custContact').value.trim() || null,
+            phone:            document.getElementById('custPhone').value.trim() || null,
+            email:            document.getElementById('custEmail').value.trim() || null,
+            gate_hours:       document.getElementById('custGateHours').value.trim() || null,
+            preferred_day:    document.getElementById('custPrefDay').value.trim() || null,
+            requires_appointment: document.getElementById('custReqAppt').checked,
+            appointment_contact:  document.getElementById('custApptContact').value.trim() || null,
+            special_instructions: document.getElementById('custSpecialInstr').value.trim() || null,
+            notes:            document.getElementById('custNotes').value.trim() || null,
+            active:           document.getElementById('custActive').checked,
+        };
+        const editing = this.state.editingCustomer && this.state.editingCustomer.id;
+        const btn = document.getElementById('custSave');
+        btn.disabled = true;
+        btn.textContent = 'Saving…';
+        let res;
+        if (editing) {
+            res = await this.supabase(`customers?id=eq.${this.state.editingCustomer.id}`, 'PATCH', payload);
+        } else {
+            res = await this.supabase('customers', 'POST', payload);
+        }
+        btn.disabled = false;
+        btn.textContent = 'Save Customer';
+        if (res) {
+            this.toast(editing ? '✓ Customer updated' : '✓ Customer added', 'success');
+            this.closeCustomerModal();
+            await this.loadCustomers();
+            this.renderCustomersAdmin();
+        }
+    },
+
+    async deleteCustomer() {
+        const c = this.state.editingCustomer;
+        if (!c || !c.id) return;
+        if (!confirm(`⚠️ Delete "${c.display_name || c.name}"?\n\nAny bookings linked to this customer will keep the booking but lose the customer link.`)) return;
+        const res = await this.supabase(`customers?id=eq.${c.id}`, 'DELETE');
+        if (res !== null) {
+            this.toast('✓ Customer deleted', 'success');
+            this.closeCustomerModal();
+            await this.loadCustomers();
+            this.renderCustomersAdmin();
+        }
+    },
+
+    // ─── TRAILER INVENTORY ADMIN (NEW in V3.1) ──────────────
+    renderTrailersAdmin() {
+        const list = document.getElementById('trlrList');
+        const total = this.state.trailers.filter(t => t.active).length;
+        const atYard = this.state.trailers.filter(t => t.active && t.current_location === 'yard').length;
+        const atCust = this.state.trailers.filter(t => t.active && t.current_location !== 'yard').length;
+        document.getElementById('trlrStatTotal').textContent = total;
+        document.getElementById('trlrStatYard').textContent  = atYard;
+        document.getElementById('trlrStatOut').textContent   = atCust;
+
+        const trailers = this.state.trailers.slice()
+            .sort((a, b) => (a.trailer_id || '').localeCompare(b.trailer_id || '', undefined, { numeric: true }));
+
+        if (!trailers.length) {
+            list.innerHTML = '<div class="text-center py-8 text-slate-500 text-sm">No trailers tracked yet. Add one above to start.</div>';
+            return;
+        }
+
+        list.innerHTML = trailers.map(t => {
+            const atYardNow = t.current_location === 'yard';
+            const cust = t.customer_id ? this.customerById(t.customer_id) : null;
+            const locLabel = atYardNow
+                ? '<span class="text-ob-500 font-semibold">📍 At Yard</span>'
+                : cust
+                    ? `<span class="text-amber-400 font-semibold">👤 ${this.esc(cust.display_name || cust.name)}</span>`
+                    : `<span class="text-amber-400 font-semibold">👤 ${this.esc(t.current_location)}</span>`;
+            const since = t.dropped_at
+                ? `<span class="text-xs text-slate-500 ml-2">since ${new Date(t.dropped_at).toLocaleDateString()}</span>`
+                : '';
+            return `
+            <div class="bg-slate-800 rounded-lg p-3 border border-slate-700 flex items-center gap-3 cursor-pointer hover:border-slate-600 ${t.active ? '' : 'inactive-row'}" data-trlr-id="${t.id}">
+                <div class="w-12 h-12 rounded-lg bg-slate-900 flex items-center justify-center font-mono font-extrabold text-lg text-slate-200">${this.esc(t.trailer_id)}</div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center flex-wrap">
+                        ${locLabel}
+                        ${since}
+                    </div>
+                    ${t.notes ? `<div class="text-xs text-slate-500 italic mt-0.5 truncate">"${this.esc(t.notes)}"</div>` : ''}
+                </div>
+                <div class="text-slate-500">→</div>
+            </div>`;
+        }).join('');
+
+        list.querySelectorAll('[data-trlr-id]').forEach(el => {
+            el.addEventListener('click', () => this.openTrailerModal(el.dataset.trlrId));
+        });
+    },
+
+    openTrailerModal(id) {
+        let t;
+        if (id) {
+            t = this.trailerById(id);
+            if (!t) return;
+            document.getElementById('trailerModalTitle').textContent = '✏️ Edit Trailer';
+            document.getElementById('trailerModalId').textContent = `ID: ${t.id}`;
+            document.getElementById('trlrDelete').classList.remove('hidden');
+        } else {
+            t = {};
+            document.getElementById('trailerModalTitle').textContent = '➕ Add Trailer';
+            document.getElementById('trailerModalId').textContent = '';
+            document.getElementById('trlrDelete').classList.add('hidden');
+        }
+        this.state.editingTrailer = t;
+
+        document.getElementById('trlrIdInput').value = t.trailer_id || '';
+        document.getElementById('trlrNotes').value   = t.notes || '';
+        document.getElementById('trlrActive').checked = t.active !== false;
+
+        // Populate customer dropdown
+        const sel = document.getElementById('trlrCustomer');
+        const customers = this.state.customers.filter(c => c.active)
+            .sort((a, b) => (a.display_name || a.name).localeCompare(b.display_name || b.name));
+        sel.innerHTML = '<option value="">— Select customer —</option>' +
+            customers.map(c => `<option value="${c.id}">${this.esc(c.display_name || c.name)}</option>`).join('');
+
+        // Set location state
+        const loc = t.current_location === 'yard' || !t.current_location ? 'yard' : 'customer';
+        this.state.editingTrailerLoc = loc;
+        this.selectTrailerLoc(loc);
+        if (loc === 'customer' && t.customer_id) sel.value = t.customer_id;
+
+        document.getElementById('trailerModal').classList.remove('hidden');
+    },
+
+    closeTrailerModal() {
+        document.getElementById('trailerModal').classList.add('hidden');
+        this.state.editingTrailer = null;
+    },
+
+    selectTrailerLoc(loc) {
+        this.state.editingTrailerLoc = loc;
+        document.querySelectorAll('.loc-btn').forEach(b => {
+            b.classList.remove('border-ob-500', 'border-amber-500', 'bg-ob-900/30', 'bg-amber-900/30');
+            if (b.dataset.loc === loc) {
+                if (loc === 'yard') b.classList.add('border-ob-500', 'bg-ob-900/30');
+                else                b.classList.add('border-amber-500', 'bg-amber-900/30');
+            }
+        });
+        document.getElementById('trlrCustomerWrap').classList.toggle('hidden', loc !== 'customer');
+    },
+
+    async saveTrailer() {
+        const trailerId = document.getElementById('trlrIdInput').value.trim();
+        if (!trailerId) { this.toast('Trailer ID required', 'error'); return; }
+        const loc = this.state.editingTrailerLoc;
+        let customerId = null, locationLabel = 'yard', droppedAt = null;
+        if (loc === 'customer') {
+            const custVal = document.getElementById('trlrCustomer').value;
+            if (!custVal) { this.toast('Select a customer', 'error'); return; }
+            customerId = parseInt(custVal, 10);
+            const cust = this.customerById(customerId);
+            locationLabel = cust ? (cust.display_name || cust.name) : 'customer';
+            // preserve existing dropped_at if already at this customer, else now
+            const prev = this.state.editingTrailer;
+            droppedAt = (prev && prev.customer_id === customerId && prev.dropped_at) ? prev.dropped_at : new Date().toISOString();
+        }
+        const payload = {
+            trailer_id: trailerId,
+            current_location: locationLabel,
+            customer_id: customerId,
+            dropped_at: droppedAt,
+            notes: document.getElementById('trlrNotes').value.trim() || null,
+            active: document.getElementById('trlrActive').checked,
+        };
+        const editing = this.state.editingTrailer && this.state.editingTrailer.id;
+        const btn = document.getElementById('trlrSave');
+        btn.disabled = true;
+        btn.textContent = 'Saving…';
+        let res;
+        if (editing) {
+            res = await this.supabase(`trailer_locations?id=eq.${this.state.editingTrailer.id}`, 'PATCH', payload);
+        } else {
+            res = await this.supabase('trailer_locations', 'POST', payload);
+        }
+        btn.disabled = false;
+        btn.textContent = 'Save Trailer';
+        if (res) {
+            this.toast(editing ? '✓ Trailer updated' : '✓ Trailer added', 'success');
+            this.closeTrailerModal();
+            await this.loadTrailers();
+        } else {
+            this.toast('Save failed — may be a duplicate trailer ID', 'error');
+        }
+    },
+
+    async deleteTrailer() {
+        const t = this.state.editingTrailer;
+        if (!t || !t.id) return;
+        if (!confirm(`⚠️ Remove trailer "${t.trailer_id}" from inventory?\n\nThis will not affect any bookings.`)) return;
+        const res = await this.supabase(`trailer_locations?id=eq.${t.id}`, 'DELETE');
+        if (res !== null) {
+            this.toast('✓ Trailer removed', 'success');
+            this.closeTrailerModal();
+            await this.loadTrailers();
+        }
+    },
+
+    // Auto-update trailer locations when a swap/delivery completes
+    async applyTrailerLocationChange(booking) {
+        if (!booking || !booking.trailer_id) return;
+        const tid = booking.trailer_id;
+        // Ensure trailer exists
+        let trailer = this.trailerByTrailerId(tid);
+        if (!trailer) {
+            // Auto-register
+            const res = await this.supabase('trailer_locations', 'POST', {
+                trailer_id: tid, current_location: 'yard', active: true,
+            });
+            if (res && res.length) trailer = res[0];
+            else return;
+        }
+        // Compute new location based on trip type + direction
+        let newLoc = 'yard', newCustId = null, newDropped = null;
+        const trip = booking.trip_type;
+        const cust = booking.customer_id ? this.customerById(booking.customer_id) : null;
+        const custName = cust ? (cust.display_name || cust.name) : null;
+
+        if (trip === 'swap' && booking.direction === 'outbound') {
+            // Drop trailer is now at customer
+            if (cust) { newLoc = custName; newCustId = cust.id; newDropped = new Date().toISOString(); }
+        } else if (trip === 'swap' && booking.direction === 'inbound') {
+            // Pickup trailer is back at yard
+            newLoc = 'yard';
+        } else if (trip === 'delivery' && cust) {
+            // Drop & leave: trailer stays at customer
+            newLoc = custName; newCustId = cust.id; newDropped = new Date().toISOString();
+        } else if (trip === 'round_trip' || trip === 'pickup') {
+            // Same trailer returns to yard
+            newLoc = 'yard';
+        } else {
+            return; // No auto-update for untyped bookings
+        }
+        await this.supabase(`trailer_locations?id=eq.${trailer.id}`, 'PATCH', {
+            current_location: newLoc,
+            customer_id: newCustId,
+            dropped_at: newDropped,
+            last_booking_id: booking.id,
+        });
+    },
+
+    // ─── MATERIALS / CARRIERS ADMIN (unchanged from V2.3) ───
+    renderMaterialsAdmin() {
+        const list = document.getElementById('matList');
+        if (!this.state.materials.length) { list.innerHTML = '<div class="text-center py-8 text-slate-500 text-sm">No materials yet.</div>'; return; }
+        const groups = {
+            outbound: this.state.materials.filter(m => m.direction === 'outbound'),
+            inbound:  this.state.materials.filter(m => m.direction === 'inbound'),
+            both:     this.state.materials.filter(m => m.direction === 'both'),
+        };
+        list.innerHTML = ['outbound','inbound','both'].filter(k => groups[k].length).map(k => {
+            const label = k === 'outbound' ? 'OUTBOUND (Bales)' : k === 'inbound' ? 'INBOUND' : 'BOTH';
+            const color = k === 'outbound' ? 'text-ob-500' : k === 'inbound' ? 'text-ib-500' : 'text-slate-400';
+            return `<div class="mt-3 mb-1 text-xs font-bold uppercase tracking-wide ${color}">${label}</div>
+            ${groups[k].map(m => `
+                <div class="bg-slate-800 rounded-lg p-3 border border-slate-700 flex items-center gap-3 ${m.active ? '' : 'inactive-row'}">
+                    <div class="flex-1 font-semibold">${this.esc(m.name)}</div>
+                    <button class="mat-toggle px-2 py-1 rounded text-xs font-semibold ${m.active ? 'bg-ob-900/50 text-ob-500' : 'bg-slate-700 text-slate-400'}" data-id="${m.id}" data-active="${m.active}">${m.active ? 'Active' : 'Inactive'}</button>
+                    <button class="mat-edit px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-xs" data-id="${m.id}">Edit</button>
+                    <button class="mat-delete px-2 py-1 rounded bg-red-900/50 hover:bg-red-900 text-red-300 text-xs" data-id="${m.id}">Delete</button>
+                </div>`).join('')}`;
+        }).join('');
+        list.querySelectorAll('.mat-toggle').forEach(b => b.addEventListener('click', () => this.toggleMaterial(b.dataset.id, b.dataset.active === 'true')));
+        list.querySelectorAll('.mat-edit').forEach(b => b.addEventListener('click', () => this.editMaterial(b.dataset.id)));
+        list.querySelectorAll('.mat-delete').forEach(b => b.addEventListener('click', () => this.deleteMaterial(b.dataset.id)));
+    },
+
+    async addMaterial() {
+        const name = document.getElementById('newMatName').value.trim();
+        const dir = document.getElementById('newMatDir').value;
+        if (!name) { this.toast('Name required', 'error'); return; }
+        const res = await this.supabase('materials', 'POST', { name, direction: dir, sort_order: 500 });
+        if (res) { document.getElementById('newMatName').value = ''; this.toast('✓ Material added', 'success'); await this.loadMaterials(); }
+    },
+    async toggleMaterial(id, active) { const r = await this.supabase(`materials?id=eq.${id}`, 'PATCH', { active: !active }); if (r) await this.loadMaterials(); },
+    async editMaterial(id) {
+        const m = this.state.materials.find(x => String(x.id) === String(id));
+        if (!m) return;
+        const n = prompt('Rename material:', m.name);
+        if (n === null || !n.trim() || n.trim() === m.name) return;
+        const r = await this.supabase(`materials?id=eq.${id}`, 'PATCH', { name: n.trim() });
+        if (r) { this.toast('✓ Renamed', 'success'); await this.loadMaterials(); }
+    },
+    async deleteMaterial(id) {
+        const m = this.state.materials.find(x => String(x.id) === String(id));
+        if (!m) return;
+        if (!confirm(`Delete "${m.name}"?`)) return;
+        const r = await this.supabase(`materials?id=eq.${id}`, 'DELETE');
+        if (r !== null) { this.toast('✓ Deleted', 'success'); await this.loadMaterials(); }
+    },
+
+    renderCarriersAdmin() {
+        const list = document.getElementById('carList');
+        if (!this.state.carriers.length) { list.innerHTML = '<div class="text-center py-8 text-slate-500 text-sm">No carriers yet.</div>'; return; }
+        list.innerHTML = this.state.carriers.map(c => `
+            <div class="bg-slate-800 rounded-lg p-3 border border-slate-700 flex items-center gap-3 ${c.active ? '' : 'inactive-row'}">
+                <div class="flex-1 font-semibold">${this.esc(c.name)}</div>
+                <button class="car-toggle px-2 py-1 rounded text-xs font-semibold ${c.active ? 'bg-ob-900/50 text-ob-500' : 'bg-slate-700 text-slate-400'}" data-id="${c.id}" data-active="${c.active}">${c.active ? 'Active' : 'Inactive'}</button>
+                <button class="car-edit px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-xs" data-id="${c.id}">Edit</button>
+                <button class="car-delete px-2 py-1 rounded bg-red-900/50 hover:bg-red-900 text-red-300 text-xs" data-id="${c.id}">Delete</button>
+            </div>`).join('');
+        list.querySelectorAll('.car-toggle').forEach(b => b.addEventListener('click', () => this.toggleCarrier(b.dataset.id, b.dataset.active === 'true')));
+        list.querySelectorAll('.car-edit').forEach(b => b.addEventListener('click', () => this.editCarrier(b.dataset.id)));
+        list.querySelectorAll('.car-delete').forEach(b => b.addEventListener('click', () => this.deleteCarrier(b.dataset.id)));
+    },
+
+    async addCarrier() {
+        const name = document.getElementById('newCarName').value.trim();
+        if (!name) { this.toast('Name required', 'error'); return; }
+        const r = await this.supabase('carriers', 'POST', { name, sort_order: 500 });
+        if (r) { document.getElementById('newCarName').value = ''; this.toast('✓ Carrier added', 'success'); await this.loadCarriers(); }
+    },
+    async toggleCarrier(id, active) { const r = await this.supabase(`carriers?id=eq.${id}`, 'PATCH', { active: !active }); if (r) await this.loadCarriers(); },
+    async editCarrier(id) {
+        const c = this.state.carriers.find(x => String(x.id) === String(id));
+        if (!c) return;
+        const n = prompt('Rename carrier:', c.name);
+        if (n === null || !n.trim() || n.trim() === c.name) return;
+        const r = await this.supabase(`carriers?id=eq.${id}`, 'PATCH', { name: n.trim() });
+        if (r) { this.toast('✓ Renamed', 'success'); await this.loadCarriers(); }
+    },
+    async deleteCarrier(id) {
+        const c = this.state.carriers.find(x => String(x.id) === String(id));
+        if (!c) return;
+        if (!confirm(`Delete "${c.name}"?`)) return;
+        const r = await this.supabase(`carriers?id=eq.${id}`, 'DELETE');
+        if (r !== null) { this.toast('✓ Deleted', 'success'); await this.loadCarriers(); }
+    },
+
+    // ─── SCORECARD ──────────────────────────────────────────
+    async renderScorecard() {
+        const list = document.getElementById('scoreList');
+        list.innerHTML = '<div class="text-center py-6 text-slate-500 text-sm">Loading…</div>';
+        const since = new Date();
+        since.setDate(since.getDate() - 30);
+        const rows = await this.supabase(
+            `schedule?arrival_type=not.is.null&time=gte.${since.toISOString()}&select=carrier,arrival_type,status`
+        );
+        if (!rows || !rows.length) {
+            list.innerHTML = '<div class="text-center py-8 text-slate-500 text-sm">No arrival data yet in last 30 days.</div>';
+            return;
+        }
+        const agg = {};
+        rows.forEach(r => {
+            if (!agg[r.carrier]) agg[r.carrier] = { total: 0, on_time: 0, early: 0, late: 0 };
+            agg[r.carrier].total++;
+            agg[r.carrier][r.arrival_type]++;
+        });
+        const sorted = Object.entries(agg).map(([name, s]) => ({
+            name, ...s,
+            onTimePct: (s.on_time / s.total) * 100,
+            earlyPct: (s.early / s.total) * 100,
+            latePct: (s.late / s.total) * 100,
+        })).sort((a,b) => b.onTimePct - a.onTimePct);
+        list.innerHTML = sorted.map(c => {
+            const gradeColor = c.onTimePct >= 85 ? 'text-ob-500' : c.onTimePct >= 70 ? 'text-amber-500' : 'text-red-400';
+            const grade = c.onTimePct >= 85 ? 'A' : c.onTimePct >= 70 ? 'B' : c.onTimePct >= 50 ? 'C' : 'D';
+            return `
+            <div class="bg-slate-800 rounded-lg p-4 border border-slate-700">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="font-bold">${this.esc(c.name)}</div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-2xl font-extrabold ${gradeColor}">${grade}</span>
+                        <span class="text-xs text-slate-500">${c.total} trips</span>
+                    </div>
+                </div>
+                <div class="flex h-2 rounded-full overflow-hidden bg-slate-900">
+                    <div class="bg-blue-500 score-bar" style="width: ${c.earlyPct}%"></div>
+                    <div class="bg-ob-500 score-bar" style="width: ${c.onTimePct}%"></div>
+                    <div class="bg-red-500 score-bar" style="width: ${c.latePct}%"></div>
+                </div>
+                <div class="flex justify-between mt-2 text-xs font-mono">
+                    <span class="text-blue-400">⏪ ${c.early} early (${c.earlyPct.toFixed(0)}%)</span>
+                    <span class="text-ob-500">✓ ${c.on_time} on-time (${c.onTimePct.toFixed(0)}%)</span>
+                    <span class="text-red-400">⏩ ${c.late} late (${c.latePct.toFixed(0)}%)</span>
+                </div>
+            </div>`;
+        }).join('');
+    },
+
+    // ─── TAB SWITCHING & EVENTS ─────────────────────────────
+    switchTab(tab) {
+        this.state.activeTab = tab;
+        document.querySelectorAll('.tab-btn').forEach(b => {
+            b.classList.remove('tab-active', 'text-slate-100');
+            b.classList.add('text-slate-400');
+            if (b.dataset.tab === tab) {
+                b.classList.add('tab-active', 'text-slate-100');
+                b.classList.remove('text-slate-400');
+            }
+        });
+        document.querySelectorAll('.tab-content').forEach(s => s.classList.add('hidden'));
+        document.getElementById(tab + 'Tab').classList.remove('hidden');
+        if (tab === 'book')      this.renderSlotGrid();
+        if (tab === 'dashboard') this.renderDashboard();
+        if (tab === 'routes')    this.renderRoutes();
+        if (tab === 'admin' && this.state.adminUnlocked) this.switchAdminSubtab(this.state.adminSubtab);
+    },
+
+    bindEvents() {
+        // Tabs
+        document.querySelectorAll('.tab-btn').forEach(b => {
+            b.addEventListener('click', () => this.switchTab(b.dataset.tab));
+        });
+        document.querySelectorAll('.admin-subtab').forEach(b => {
+            b.addEventListener('click', () => this.switchAdminSubtab(b.dataset.subtab));
+        });
+        // Booking date navigation
+        document.getElementById('bookDate').addEventListener('change', e => { this.state.activeDate = e.target.value; this.loadSchedule(); });
+        document.getElementById('prevDay').addEventListener('click', () => this.shiftDay(-1, 'activeDate', 'bookDate'));
+        document.getElementById('nextDay').addEventListener('click', () => this.shiftDay(1, 'activeDate', 'bookDate'));
+        document.getElementById('todayBtn').addEventListener('click', () => {
+            const today = new Date().toISOString().slice(0, 10);
+            this.state.activeDate = today;
+            document.getElementById('bookDate').value = today;
+            this.loadSchedule();
+        });
+        // Routes date navigation
+        document.getElementById('routesDate').addEventListener('change', e => { this.state.routesDate = e.target.value; this.renderRoutes(); });
+        document.getElementById('routesPrevDay').addEventListener('click', () => this.shiftDay(-1, 'routesDate', 'routesDate'));
+        document.getElementById('routesNextDay').addEventListener('click', () => this.shiftDay(1, 'routesDate', 'routesDate'));
+        document.getElementById('routesTodayBtn').addEventListener('click', () => {
+            const today = new Date().toISOString().slice(0, 10);
+            this.state.routesDate = today;
+            document.getElementById('routesDate').value = today;
+            this.renderRoutes();
+        });
+        // Dashboard refresh
+        document.getElementById('refreshDash').addEventListener('click', () => this.loadSchedule());
+
+        // Book modal
+        document.getElementById('closeModal').addEventListener('click', () => this.closeBookModal());
+        document.querySelectorAll('.dir-btn').forEach(b => b.addEventListener('click', () => this.selectDirection(b.dataset.dir)));
+        document.getElementById('modalCarrier').addEventListener('input', () => this.onCarrierInput());
+        document.getElementById('modalMaterial').addEventListener('change', () => this.handleMaterialChange());
+        document.getElementById('modalCustomerSearch').addEventListener('input', () => this.onCustomerSearchInput());
+        document.getElementById('clearSelCust').addEventListener('click', () => this.clearSelectedCustomer());
+        document.getElementById('confirmBook').addEventListener('click', () => this.confirmBooking());
+
+        // Complete modal
+        document.getElementById('closeCompleteModal').addEventListener('click', () => this.closeCompleteModal());
+        document.getElementById('bolCameraBtn').addEventListener('click', () => document.getElementById('bolCameraInput').click());
+        document.getElementById('bolLibraryBtn').addEventListener('click', () => document.getElementById('bolLibraryInput').click());
+        document.getElementById('bolCameraInput').addEventListener('change', e => this.handleBolPhotoSelect(e.target.files[0]));
+        document.getElementById('bolLibraryInput').addEventListener('change', e => this.handleBolPhotoSelect(e.target.files[0]));
+        document.getElementById('removeBolPhoto').addEventListener('click', () => this.removeBolPhoto());
+        document.getElementById('confirmComplete').addEventListener('click', () => this.confirmComplete());
+
+        // Edit modal
+        document.getElementById('closeEditModal').addEventListener('click', () => this.closeEditModal());
+        document.querySelectorAll('.edit-dir-btn').forEach(b => b.addEventListener('click', () => this.selectEditDirection(b.dataset.dir)));
+        document.getElementById('editSave').addEventListener('click', () => this.saveEdit());
+        document.getElementById('editDelete').addEventListener('click', () => this.deleteBooking());
+
+        // Customer modal
+        document.getElementById('closeCustomerModal').addEventListener('click', () => this.closeCustomerModal());
+        document.getElementById('custCopyBillToShip').addEventListener('click', () => this.custCopyBillToShip());
+        document.getElementById('custSave').addEventListener('click', () => this.saveCustomer());
+        document.getElementById('custDelete').addEventListener('click', () => this.deleteCustomer());
+        document.getElementById('addCustBtn').addEventListener('click', () => this.openCustomerModal(null));
+        document.getElementById('custSearchInput').addEventListener('input', e => {
+            this.state.custSearch = e.target.value;
+            this.renderCustomersAdmin();
+        });
+        document.getElementById('custFilter').addEventListener('change', e => {
+            this.state.custFilter = e.target.value;
+            this.renderCustomersAdmin();
+        });
+
+        // ═══ V3.1 BINDINGS ═══
+        // Trip type buttons (in booking modal)
+        document.querySelectorAll('.trip-btn').forEach(b => {
+            b.addEventListener('click', () => this.selectTripType(b.dataset.trip));
+        });
+
+        // Pickup-trailer select refresh when swap customer/drop changes
+        document.getElementById('modalDropTrlr').addEventListener('change', e => {
+            if (e.target.value === '__OTHER__') {
+                const manual = prompt('Enter drop trailer ID manually:');
+                if (manual) {
+                    // Add option and select it
+                    const opt = document.createElement('option');
+                    opt.value = manual;
+                    opt.textContent = manual + ' (manual)';
+                    e.target.insertBefore(opt, e.target.firstChild.nextSibling);
+                    e.target.value = manual;
+                } else {
+                    e.target.value = '';
+                }
+            }
+        });
+        document.getElementById('modalPickTrlr').addEventListener('change', e => {
+            if (e.target.value === '__OTHER__') {
+                const manual = prompt('Enter pickup trailer ID manually:');
+                if (manual) {
+                    const opt = document.createElement('option');
+                    opt.value = manual;
+                    opt.textContent = manual + ' (manual)';
+                    e.target.insertBefore(opt, e.target.firstChild.nextSibling);
+                    e.target.value = manual;
+                } else {
+                    e.target.value = '';
+                }
+            }
+        });
+
+        // Trailer inventory admin
+        document.getElementById('addTrlrBtn').addEventListener('click', () => {
+            const id = document.getElementById('newTrlrId').value.trim();
+            if (!id) { this.toast('Enter a trailer ID first', 'error'); return; }
+            // Open modal pre-filled
+            this.openTrailerModal(null);
+            document.getElementById('trlrIdInput').value = id;
+            const locSel = document.getElementById('newTrlrLoc').value;
+            this.selectTrailerLoc(locSel);
+            document.getElementById('newTrlrId').value = '';
+        });
+
+        // Trailer edit modal
+        document.getElementById('closeTrailerModal').addEventListener('click', () => this.closeTrailerModal());
+        document.getElementById('trlrSave').addEventListener('click', () => this.saveTrailer());
+        document.getElementById('trlrDelete').addEventListener('click', () => this.deleteTrailer());
+        document.querySelectorAll('.loc-btn').forEach(b => {
+            b.addEventListener('click', () => this.selectTrailerLoc(b.dataset.loc));
+        });
+
+        // Admin PIN
+        document.getElementById('pinSubmit').addEventListener('click', () => this.trySubmitPin());
+        document.getElementById('pinInput').addEventListener('keypress', e => { if (e.key === 'Enter') this.trySubmitPin(); });
+        document.getElementById('adminLock').addEventListener('click', () => this.lockAdmin());
+
+        // Materials / carriers
+        document.getElementById('addMatBtn').addEventListener('click', () => this.addMaterial());
+        document.getElementById('addCarBtn').addEventListener('click', () => this.addCarrier());
+
+        // Settings
+        document.getElementById('saveSettings').addEventListener('click', () => this.saveConfig());
+        document.getElementById('resetSettings').addEventListener('click', () => this.resetConfig());
+
+        // Global keyboard shortcut: / focuses book date
+        document.addEventListener('keydown', e => {
+            if (e.key === '/' && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) {
+                e.preventDefault();
+                document.getElementById('bookDate').focus();
+            }
+            if (e.key === 'Escape') {
+                ['bookModal','completeModal','editModal','customerModal','trailerModal','photoViewer'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el && !el.classList.contains('hidden')) el.classList.add('hidden');
+                });
+            }
+        });
+    },
+
+    // ─── HELPERS ────────────────────────────────────────────
+    shiftDay(delta, stateKey, elementId) {
+        const d = new Date(this.state[stateKey] + 'T00:00:00');
+        d.setDate(d.getDate() + delta);
+        const iso = d.toISOString().slice(0, 10);
+        this.state[stateKey] = iso;
+        document.getElementById(elementId).value = iso;
+        if (stateKey === 'activeDate') this.loadSchedule();
+        else this.renderRoutes();
+    },
+
+    localIsoForHour(dateStr, hour) {
+        const d = new Date(dateStr + 'T00:00:00');
+        d.setHours(hour, 0, 0, 0);
+        return d.toISOString();
+    },
+
+    formatHour(h) {
+        if (h >= 24) h = h - 24;
+        if (h === 0) return '12 AM';
+        if (h === 12) return '12 PM';
+        if (h < 12) return `${h} AM`;
+        return `${h - 12} PM`;
+    },
+
+    formatBytes(bytes) {
+        if (!bytes) return '0 B';
+        const kb = bytes / 1024;
+        if (kb < 1024) return `${kb.toFixed(1)} KB`;
+        return `${(kb / 1024).toFixed(1)} MB`;
+    },
+
+    esc(s) {
+        if (s == null) return '';
+        return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    },
+
+    toast(msg, type = 'info') {
+        const el = document.getElementById('toast');
+        const colors = {
+            success: 'bg-ob-600 text-white',
+            error:   'bg-red-600 text-white',
+            info:    'bg-slate-700 text-white',
+        };
+        el.className = `fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-lg shadow-2xl font-semibold text-sm toast-in ${colors[type] || colors.info}`;
+        el.textContent = msg;
+        el.classList.remove('hidden');
+        clearTimeout(this._toastTimer);
+        this._toastTimer = setTimeout(() => el.classList.add('hidden'), 2500);
+    },
+};
+
+document.addEventListener('DOMContentLoaded', () => App.init());
+window.App = App;
+</script>
+</body>
+</html>
