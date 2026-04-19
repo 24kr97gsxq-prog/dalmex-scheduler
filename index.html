@@ -423,15 +423,11 @@
         <div class="text-xs font-semibold text-amber-400 uppercase">🔁 Trailer Swap Details</div>
         <div>
           <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Trailer to DROP (bring from yard)</label>
-          <select id="modalDropTrlr" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm font-mono">
-            <option value="">— Select trailer at yard —</option>
-          </select>
+          <input id="modalDropTrlr" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm font-mono" placeholder="e.g., 805">
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Trailer to PICK UP (return from customer)</label>
-          <select id="modalPickTrlr" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm font-mono">
-            <option value="">— Select trailer at this customer —</option>
-          </select>
+          <input id="modalPickTrlr" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm font-mono" placeholder="e.g., 812">
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Return Material (OCC etc.)</label>
@@ -1320,27 +1316,17 @@ const App = {
         const roundFields = document.getElementById('modalRoundTripFields');
         swapFields.classList.toggle('hidden', trip !== 'swap');
         roundFields.classList.toggle('hidden', trip !== 'round_trip');
-        if (trip === 'swap') this.populateSwapTrailerPickers();
+        if (trip === 'swap') this.clearSwapTrailerFields();
         if (trip === 'swap' || trip === 'round_trip') this.populateReturnMaterialPickers();
         this.updateConfirmBtn();
     },
 
-    populateSwapTrailerPickers() {
-        const dropSel = document.getElementById('modalDropTrlr');
-        const pickSel = document.getElementById('modalPickTrlr');
-        const yardTrailers = this.trailersAtYard();
-        const custTrailers = this.trailersAtCustomer(this.state.selectedCustomerId);
-        dropSel.innerHTML = '<option value="">— Select trailer at yard —</option>' +
-            yardTrailers.map(t => `<option value="${this.esc(t.trailer_id)}">${this.esc(t.trailer_id)}</option>`).join('') +
-            '<option value="__OTHER__">Other / type in truck field...</option>';
-        if (custTrailers.length) {
-            pickSel.innerHTML = '<option value="">— Select trailer at this customer —</option>' +
-                custTrailers.map(t => `<option value="${this.esc(t.trailer_id)}">${this.esc(t.trailer_id)}</option>`).join('') +
-                '<option value="__OTHER__">Other / type in truck field...</option>';
-        } else {
-            pickSel.innerHTML = '<option value="">— No trailers tracked at this customer —</option>' +
-                '<option value="__OTHER__">Enter trailer ID manually...</option>';
-        }
+    clearSwapTrailerFields() {
+        // Text inputs — just clear values when swap is selected
+        const dropInput = document.getElementById('modalDropTrlr');
+        const pickInput = document.getElementById('modalPickTrlr');
+        if (dropInput) dropInput.value = '';
+        if (pickInput) pickInput.value = '';
     },
 
     populateReturnMaterialPickers() {
@@ -1481,12 +1467,9 @@ const App = {
 
     async _bookSwap(base) {
         // SWAP = two linked bookings at the same time slot
-        const dropTrailer = document.getElementById('modalDropTrlr').value;
-        const pickTrailer = document.getElementById('modalPickTrlr').value;
-        const pickupMat   = document.getElementById('modalPickMat').value.trim();
-        const manualTrailer = base.trailer_id;
-        const dropTrlr = dropTrailer === '__OTHER__' ? manualTrailer : dropTrailer;
-        const pickTrlr = pickTrailer === '__OTHER__' ? manualTrailer : pickTrailer;
+        const dropTrlr = document.getElementById('modalDropTrlr').value.trim();
+        const pickTrlr = document.getElementById('modalPickTrlr').value.trim();
+        const pickupMat = document.getElementById('modalPickMat').value.trim();
         if (!dropTrlr)   { throw new Error('Drop trailer required'); }
         if (!pickTrlr)   { throw new Error('Pickup trailer required'); }
         if (!pickupMat)  { throw new Error('Return material required'); }
@@ -2803,37 +2786,6 @@ const App = {
         // Trip type buttons (in booking modal)
         document.querySelectorAll('.trip-btn').forEach(b => {
             b.addEventListener('click', () => this.selectTripType(b.dataset.trip));
-        });
-
-        // Pickup-trailer select refresh when swap customer/drop changes
-        document.getElementById('modalDropTrlr').addEventListener('change', e => {
-            if (e.target.value === '__OTHER__') {
-                const manual = prompt('Enter drop trailer ID manually:');
-                if (manual) {
-                    // Add option and select it
-                    const opt = document.createElement('option');
-                    opt.value = manual;
-                    opt.textContent = manual + ' (manual)';
-                    e.target.insertBefore(opt, e.target.firstChild.nextSibling);
-                    e.target.value = manual;
-                } else {
-                    e.target.value = '';
-                }
-            }
-        });
-        document.getElementById('modalPickTrlr').addEventListener('change', e => {
-            if (e.target.value === '__OTHER__') {
-                const manual = prompt('Enter pickup trailer ID manually:');
-                if (manual) {
-                    const opt = document.createElement('option');
-                    opt.value = manual;
-                    opt.textContent = manual + ' (manual)';
-                    e.target.insertBefore(opt, e.target.firstChild.nextSibling);
-                    e.target.value = manual;
-                } else {
-                    e.target.value = '';
-                }
-            }
         });
 
         // Trailer inventory admin
