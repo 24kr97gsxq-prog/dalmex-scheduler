@@ -1830,7 +1830,19 @@ const App = {
         document.getElementById('routeStatTotal').textContent = total;
         document.getElementById('routeStatDone').textContent = done;
         document.getElementById('routeStatRemain').textContent = total - done;
-        document.getElementById('routesSubtitle').textContent = `${new Date(this.state.routesDate).toLocaleDateString(undefined, {weekday:'long', month:'short', day:'numeric'})}`;
+        const todayIso = new Date().toISOString().slice(0, 10);
+        const isToday = this.state.routesDate === todayIso;
+        const dateText = new Date(this.state.routesDate + 'T00:00:00').toLocaleDateString(undefined, {weekday:'long', month:'short', day:'numeric'});
+        document.getElementById('routesSubtitle').innerHTML = isToday
+            ? `<span class="text-ob-500 font-bold">📅 TODAY</span> · ${dateText}`
+            : `<span class="text-amber-400 font-bold">📅 ${dateText}</span> · <button id="jumpToToday" class="text-blue-400 underline">Jump to today</button>`;
+        // Bind "Jump to today" if it appears
+        const jumpBtn = document.getElementById('jumpToToday');
+        if (jumpBtn) jumpBtn.addEventListener('click', () => {
+            this.state.routesDate = todayIso;
+            document.getElementById('routesDate').value = todayIso;
+            this.renderRoutes();
+        });
 
         const list = document.getElementById('routeList');
         const empty = document.getElementById('routeEmpty');
