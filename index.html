@@ -99,7 +99,7 @@
     <button class="tab-btn px-4 py-2.5 text-sm font-semibold text-slate-400 whitespace-nowrap" data-tab="dashboard">Yard Dashboard</button>
     <button class="tab-btn px-4 py-2.5 text-sm font-semibold text-slate-400 whitespace-nowrap" data-tab="routes">🚚 Driver Schedule</button>
     <button class="tab-btn px-4 py-2.5 text-sm font-semibold text-slate-400 whitespace-nowrap" data-tab="admin">🔒 Admin</button>
-    <button class="tab-btn px-4 py-2.5 text-sm font-semibold text-slate-400 whitespace-nowrap" data-tab="settings">Settings</button>
+    <button class="tab-btn hidden px-4 py-2.5 text-sm font-semibold text-slate-400 whitespace-nowrap" data-tab="settings" id="settingsTabBtn">⚙️ Settings</button>
   </div>
 </header>
 
@@ -245,6 +245,7 @@
               <option value="active">Active Only</option>
               <option value="pallet">Pallet Buyers</option>
               <option value="occ">Cardboard Sources</option>
+              <option value="cores">Pallet Core Sources</option>
               <option value="swap">Trailer Swap Partners</option>
               <option value="untagged">Untagged (No Relationship Set)</option>
             </select>
@@ -444,8 +445,9 @@
           <input id="modalPickTrlr" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm font-mono" placeholder="e.g., 812">
         </div>
         <div>
-          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Return Material (OCC etc.)</label>
+          <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Return Material</label>
           <select id="modalPickMat" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm"></select>
+          <p class="text-xs text-slate-500 mt-1">What's in the trailer you're picking up (OCC, Pallet Cores, etc.)</p>
         </div>
       </div>
 
@@ -678,7 +680,7 @@
       <!-- Relationship flags -->
       <div class="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
         <label class="block text-xs font-semibold text-slate-400 uppercase mb-2">Relationship Type</label>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
           <label class="flex items-center gap-2 cursor-pointer">
             <input id="custFlagPallets" type="checkbox" class="w-4 h-4">
             <span class="text-sm">📦 We deliver pallets</span>
@@ -686,6 +688,10 @@
           <label class="flex items-center gap-2 cursor-pointer">
             <input id="custFlagOCC" type="checkbox" class="w-4 h-4">
             <span class="text-sm">♻️ We pick up OCC</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input id="custFlagCores" type="checkbox" class="w-4 h-4">
+            <span class="text-sm">🪵 We pick up Pallet Cores</span>
           </label>
           <label class="flex items-center gap-2 cursor-pointer">
             <input id="custFlagSwap" type="checkbox" class="w-4 h-4">
@@ -1144,8 +1150,10 @@ const App = {
                 } else if (booking.status === 'completed') statusLabel = '✓ DONE';
                 const customer = this.customerById(booking.customer_id);
                 const custLine = customer ? `<div class="text-xs text-slate-500 truncate mt-0.5">→ ${this.esc(customer.display_name || customer.name)}</div>` : '';
+                const editableClass = this.state.adminUnlocked ? 'cursor-pointer hover:border-slate-400' : '';
+                const editHint = this.state.adminUnlocked ? `<div class="text-xs text-ob-500 mt-1 font-semibold">✏️ Tap to edit</div>` : '';
                 return `
-                <div class="slot-btn p-3 mb-2 rounded-lg border-2 ${cls}">
+                <div class="slot-btn p-3 mb-2 rounded-lg border-2 ${cls} ${editableClass}" ${this.state.adminUnlocked ? `data-edit-id="${booking.id}"` : ''}>
                     <div class="flex justify-between items-start">
                         <div class="text-xs font-mono text-slate-300">${hourLabel} – ${hourEnd}</div>
                         <div class="text-xs font-bold">${statusLabel}</div>
@@ -1153,6 +1161,7 @@ const App = {
                     <div class="text-sm font-semibold mt-1 truncate">${this.esc(booking.carrier)}</div>
                     <div class="text-xs text-slate-400 truncate">${this.esc(booking.material)}</div>
                     ${custLine}
+                    ${editHint}
                 </div>`;
             }).join('');
             return `
@@ -1168,6 +1177,10 @@ const App = {
         }).join('');
         grid.querySelectorAll('[data-slot]').forEach(btn => {
             btn.addEventListener('click', () => this.openBookModal(btn.dataset.slot, btn.dataset.dock));
+        });
+        // V3.2.1: Admin can tap booked slots to edit
+        grid.querySelectorAll('[data-edit-id]').forEach(el => {
+            el.addEventListener('click', () => this.openEditModal(el.dataset.editId));
         });
     },
 
@@ -1294,9 +1307,10 @@ const App = {
             results.innerHTML = matches.map(c => {
                 const city = c.shipping_city || c.billing_city || '';
                 const badges = [];
-                if (c.delivers_pallets) badges.push('<span class="text-xs text-ob-500">📦</span>');
-                if (c.picks_up_occ)     badges.push('<span class="text-xs text-blue-400">♻️</span>');
-                if (c.trailer_swap)     badges.push('<span class="text-xs text-amber-500">🔄</span>');
+                if (c.delivers_pallets)      badges.push('<span class="text-xs text-ob-500">📦</span>');
+                if (c.picks_up_occ)          badges.push('<span class="text-xs text-blue-400">♻️</span>');
+                if (c.picks_up_pallet_cores) badges.push('<span class="text-xs text-orange-400">🪵</span>');
+                if (c.trailer_swap)          badges.push('<span class="text-xs text-amber-500">🔄</span>');
                 return `<div class="customer-search-item px-3 py-2 border-b border-slate-700" data-id="${c.id}">
                     <div class="flex items-center justify-between">
                         <span class="font-semibold text-sm">${this.esc(c.display_name || c.name)}</span>
@@ -2221,7 +2235,11 @@ const App = {
             document.getElementById('adminContent').classList.remove('hidden');
             document.getElementById('pinError').classList.add('hidden');
             document.getElementById('pinInput').value = '';
+            document.getElementById('settingsTabBtn').classList.remove('hidden');
             this.switchAdminSubtab(this.state.adminSubtab);
+            // Refresh the slot grid so edit hints appear when they switch back to Book a Slot
+            this.renderSlotGrid();
+            if (this.state.activeTab === 'dashboard') this.renderDashboard();
         } else {
             document.getElementById('pinError').classList.remove('hidden');
             document.getElementById('pinInput').value = '';
@@ -2232,6 +2250,12 @@ const App = {
         this.state.adminUnlocked = false;
         document.getElementById('adminGate').classList.remove('hidden');
         document.getElementById('adminContent').classList.add('hidden');
+        document.getElementById('settingsTabBtn').classList.add('hidden');
+        // If currently ON Settings tab, switch back to Book a Slot
+        if (this.state.activeTab === 'settings') this.switchTab('book');
+        // Refresh so edit hints disappear
+        this.renderSlotGrid();
+        if (this.state.activeTab === 'dashboard') this.renderDashboard();
     },
 
     switchAdminSubtab(sub) {
@@ -2263,8 +2287,9 @@ const App = {
         if (filter === 'active') filtered = filtered.filter(c => c.active);
         else if (filter === 'pallet') filtered = filtered.filter(c => c.delivers_pallets);
         else if (filter === 'occ') filtered = filtered.filter(c => c.picks_up_occ);
+        else if (filter === 'cores') filtered = filtered.filter(c => c.picks_up_pallet_cores);
         else if (filter === 'swap') filtered = filtered.filter(c => c.trailer_swap);
-        else if (filter === 'untagged') filtered = filtered.filter(c => !c.delivers_pallets && !c.picks_up_occ && !c.trailer_swap);
+        else if (filter === 'untagged') filtered = filtered.filter(c => !c.delivers_pallets && !c.picks_up_occ && !c.picks_up_pallet_cores && !c.trailer_swap);
         // Apply search
         if (search) {
             filtered = filtered.filter(c => {
@@ -2285,9 +2310,10 @@ const App = {
             const state = c.shipping_state || c.billing_state;
             const loc = [city, state].filter(Boolean).join(', ');
             const badges = [];
-            if (c.delivers_pallets) badges.push('<span class="px-1.5 py-0.5 rounded bg-ob-900/50 text-ob-500 text-xs">📦 Pallet</span>');
-            if (c.picks_up_occ)     badges.push('<span class="px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-400 text-xs">♻️ OCC</span>');
-            if (c.trailer_swap)     badges.push('<span class="px-1.5 py-0.5 rounded bg-amber-900/50 text-amber-400 text-xs">🔄 Swap</span>');
+            if (c.delivers_pallets)       badges.push('<span class="px-1.5 py-0.5 rounded bg-ob-900/50 text-ob-500 text-xs">📦 Pallet</span>');
+            if (c.picks_up_occ)           badges.push('<span class="px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-400 text-xs">♻️ OCC</span>');
+            if (c.picks_up_pallet_cores)  badges.push('<span class="px-1.5 py-0.5 rounded bg-orange-900/50 text-orange-400 text-xs">🪵 Cores</span>');
+            if (c.trailer_swap)           badges.push('<span class="px-1.5 py-0.5 rounded bg-amber-900/50 text-amber-400 text-xs">🔄 Swap</span>');
             return `
             <div class="bg-slate-800 rounded-lg p-3 border border-slate-700 flex items-center gap-3 cursor-pointer hover:border-slate-600 ${c.active ? '' : 'inactive-row'}" data-cust-id="${c.id}">
                 <div class="flex-1 min-w-0">
@@ -2327,6 +2353,7 @@ const App = {
         document.getElementById('custCompany').value = c.company || '';
         document.getElementById('custFlagPallets').checked = !!c.delivers_pallets;
         document.getElementById('custFlagOCC').checked = !!c.picks_up_occ;
+        document.getElementById('custFlagCores').checked = !!c.picks_up_pallet_cores;
         document.getElementById('custFlagSwap').checked = !!c.trailer_swap;
         document.getElementById('custShipStreet').value = c.shipping_address || '';
         document.getElementById('custShipCity').value = c.shipping_city || '';
@@ -2370,9 +2397,10 @@ const App = {
             name,
             company: document.getElementById('custCompany').value.trim() || null,
             display_name: name,  // simplify: edit display_name same as name for user-added customers
-            delivers_pallets: document.getElementById('custFlagPallets').checked,
-            picks_up_occ:     document.getElementById('custFlagOCC').checked,
-            trailer_swap:     document.getElementById('custFlagSwap').checked,
+            delivers_pallets:       document.getElementById('custFlagPallets').checked,
+            picks_up_occ:           document.getElementById('custFlagOCC').checked,
+            picks_up_pallet_cores:  document.getElementById('custFlagCores').checked,
+            trailer_swap:           document.getElementById('custFlagSwap').checked,
             shipping_address: document.getElementById('custShipStreet').value.trim() || null,
             shipping_city:    document.getElementById('custShipCity').value.trim() || null,
             shipping_state:   document.getElementById('custShipState').value.trim() || null,
