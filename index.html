@@ -62,6 +62,20 @@
   /* Customer search */
   .customer-search-item { cursor: pointer; transition: background 0.1s; }
   .customer-search-item:hover { background: rgba(71, 85, 105, 0.5); }
+  /* V3.2 Dock columns */
+  .dock-col-header { padding: 0.75rem 1rem; border-radius: 0.75rem 0.75rem 0 0; font-weight: 800; font-size: 0.9rem; text-align: center; letter-spacing: 0.02em; }
+  .dock-col-rec-out  { background: rgba(16,185,129,0.15); color: #34d399; border: 2px solid rgba(16,185,129,0.4); border-bottom: none; }
+  .dock-col-rec-in   { background: rgba(59,130,246,0.15); color: #60a5fa; border: 2px solid rgba(59,130,246,0.4); border-bottom: none; }
+  .dock-col-pallet   { background: rgba(245,158,11,0.15); color: #fbbf24; border: 2px solid rgba(245,158,11,0.4); border-bottom: none; }
+  .dock-col-body     { padding: 0.5rem; background: rgba(30,41,59,0.3); border-radius: 0 0 0.75rem 0.75rem; border: 2px solid; border-top: none; min-height: 400px; }
+  .dock-col-body-rec-out { border-color: rgba(16,185,129,0.4); }
+  .dock-col-body-rec-in  { border-color: rgba(59,130,246,0.4); }
+  .dock-col-body-pallet  { border-color: rgba(245,158,11,0.4); }
+  /* Dock badges (used on dashboard/driver schedule cards) */
+  .dock-badge { padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.02em; }
+  .dock-badge-rec-out { background: rgba(16,185,129,0.2); color: #34d399; border: 1px solid rgba(16,185,129,0.4); }
+  .dock-badge-rec-in  { background: rgba(59,130,246,0.2); color: #60a5fa; border: 1px solid rgba(59,130,246,0.4); }
+  .dock-badge-pallet  { background: rgba(245,158,11,0.2); color: #fbbf24; border: 1px solid rgba(245,158,11,0.4); }
 </style>
 </head>
 
@@ -95,7 +109,7 @@
     <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
       <div>
         <h2 class="text-2xl font-bold">Schedule a Truck</h2>
-        <p class="text-sm text-slate-400">Select a date, then tap a 1-hour slot to book.</p>
+        <p class="text-sm text-slate-400">Each dock holds 1 truck per 1-hour slot. Tap any available slot to book.</p>
       </div>
       <div class="flex gap-2">
         <button id="prevDay" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">◀</button>
@@ -106,11 +120,11 @@
     </div>
     <div class="flex gap-4 mb-4 text-xs flex-wrap">
       <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-slate-700 border border-slate-600"></span><span class="text-slate-400">Available</span></div>
-      <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded slot-booked-ob border"></span><span class="text-slate-400">Outbound</span></div>
-      <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded slot-booked-ib border"></span><span class="text-slate-400">Inbound</span></div>
+      <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded slot-booked-ob border"></span><span class="text-slate-400">Booked</span></div>
       <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded slot-arrived border"></span><span class="text-slate-400">Arrived</span></div>
+      <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded slot-completed border"></span><span class="text-slate-400">Completed</span></div>
     </div>
-    <div id="slotGrid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"></div>
+    <div id="slotGrid" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
   </section>
 
   <section id="dashboardTab" class="tab-content hidden">
@@ -597,6 +611,15 @@
           <input id="editTrailer" type="text" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm">
         </div>
       </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Dock</label>
+        <select id="editDock" class="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-sm">
+          <option value="">— None —</option>
+          <option value="recycling_out">♻️ Recycling Out</option>
+          <option value="recycling_in">📥 Recycling In</option>
+          <option value="pallet_yard">📦 Pallet Yard</option>
+        </select>
+      </div>
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Status</label>
@@ -849,6 +872,7 @@ const App = {
         selectedSlot: null,
         selectedDir:  null,
         selectedCustomerId: null,
+        selectedDock: null,
         schedule:     [],
         materials:    [],
         carriers:     [],
@@ -1059,6 +1083,15 @@ const App = {
         return parts.length ? parts.join(', ') : null;
     },
 
+    // V3.2: render dock badge for a booking
+    dockBadge(dockType) {
+        if (!dockType) return '';
+        if (dockType === 'recycling_out') return '<span class="dock-badge dock-badge-rec-out">♻️ REC OUT</span>';
+        if (dockType === 'recycling_in')  return '<span class="dock-badge dock-badge-rec-in">📥 REC IN</span>';
+        if (dockType === 'pallet_yard')   return '<span class="dock-badge dock-badge-pallet">📦 PALLET YARD</span>';
+        return '';
+    },
+
     async loadSchedule() {
         if (!this.state.supabaseUrl || !this.state.supabaseKey) { this.renderSlotGrid(); return; }
         const d = new Date(this.state.activeDate + 'T00:00:00');
@@ -1071,69 +1104,93 @@ const App = {
         if (this.state.activeTab === 'routes') await this.renderRoutes();
     },
 
-    // ─── BOOKING SLOT GRID ───────────────────────────────────
+    // ─── BOOKING SLOT GRID (V3.2: 3 dock columns) ────────────
     renderSlotGrid() {
         const grid = document.getElementById('slotGrid');
         const date = this.state.activeDate;
-        const slots = [];
+        const hours = [];
         for (let h = this.state.startHour; h < this.state.endHour; h++) {
-            slots.push({ hour: h, iso: this.localIsoForHour(date, h) });
+            hours.push({ hour: h, iso: this.localIsoForHour(date, h) });
         }
-        grid.innerHTML = slots.map(s => {
-            const booking = this.state.schedule.find(r =>
-                new Date(r.time).getTime() === new Date(s.iso).getTime() &&
-                r.status !== 'cancelled' && r.status !== 'no_show'
-            );
-            const hourLabel = this.formatHour(s.hour);
-            const hourEnd   = this.formatHour(s.hour + 1);
-            if (!booking) {
+        const docks = [
+            { key: 'recycling_out', title: '♻️ RECYCLING OUT', subtitle: 'Outbound bales', colClass: 'dock-col-rec-out', bodyClass: 'dock-col-body-rec-out' },
+            { key: 'recycling_in',  title: '📥 RECYCLING IN',  subtitle: 'Inbound deliveries', colClass: 'dock-col-rec-in', bodyClass: 'dock-col-body-rec-in' },
+            { key: 'pallet_yard',   title: '📦 PALLET YARD',   subtitle: 'DMX pallet loading', colClass: 'dock-col-pallet', bodyClass: 'dock-col-body-pallet' },
+        ];
+        grid.innerHTML = docks.map(dock => {
+            const slots = hours.map(s => {
+                const booking = this.state.schedule.find(r =>
+                    new Date(r.time).getTime() === new Date(s.iso).getTime() &&
+                    r.dock_type === dock.key &&
+                    r.status !== 'cancelled' && r.status !== 'no_show'
+                );
+                const hourLabel = this.formatHour(s.hour);
+                const hourEnd   = this.formatHour(s.hour + 1);
+                if (!booking) {
+                    return `
+                    <button class="slot-btn w-full p-3 mb-2 rounded-lg bg-slate-800 border border-slate-700 hover:border-slate-500 text-left" data-slot="${s.iso}" data-dock="${dock.key}">
+                        <div class="text-xs font-mono text-slate-400">${hourLabel} – ${hourEnd}</div>
+                        <div class="text-xs text-slate-500 mt-0.5">Tap to book</div>
+                    </button>`;
+                }
+                const cls = booking.status === 'arrived' ? 'slot-arrived'
+                          : booking.status === 'completed' ? 'slot-completed'
+                          : booking.direction === 'outbound' ? 'slot-booked-ob' : 'slot-booked-ib';
+                let statusLabel = '📋 BOOKED';
+                if (booking.status === 'arrived') {
+                    statusLabel = booking.arrival_type === 'late' ? '⏩ LATE'
+                                : booking.arrival_type === 'early' ? '⏪ EARLY'
+                                : '🟡 ON SITE';
+                } else if (booking.status === 'completed') statusLabel = '✓ DONE';
+                const customer = this.customerById(booking.customer_id);
+                const custLine = customer ? `<div class="text-xs text-slate-500 truncate mt-0.5">→ ${this.esc(customer.display_name || customer.name)}</div>` : '';
                 return `
-                <button class="slot-btn p-4 rounded-xl bg-slate-800 border border-slate-700 hover:border-ob-500 text-left" data-slot="${s.iso}">
-                    <div class="text-sm font-mono text-slate-400">${hourLabel} – ${hourEnd}</div>
-                    <div class="text-sm font-semibold text-slate-300 mt-1">Available</div>
-                    <div class="text-xs text-slate-500 mt-0.5">Tap to book</div>
-                </button>`;
-            }
-            const cls = booking.status === 'arrived' ? 'slot-arrived'
-                      : booking.status === 'completed' ? 'slot-completed'
-                      : booking.direction === 'outbound' ? 'slot-booked-ob' : 'slot-booked-ib';
-            const dirLabel = booking.direction === 'outbound' ? 'OUTBOUND' : 'INBOUND';
-            const dirColor = booking.direction === 'outbound' ? 'text-ob-500' : 'text-ib-500';
-            let statusLabel = '📋 BOOKED';
-            if (booking.status === 'arrived') {
-                statusLabel = booking.arrival_type === 'late' ? '⏩ LATE'
-                            : booking.arrival_type === 'early' ? '⏪ EARLY'
-                            : '🟡 ON SITE';
-            } else if (booking.status === 'completed') statusLabel = '✓ DONE';
-            const customer = this.customerById(booking.customer_id);
-            const custLine = customer ? `<div class="text-xs text-slate-500 truncate">→ ${this.esc(customer.display_name || customer.name)}</div>` : '';
+                <div class="slot-btn p-3 mb-2 rounded-lg border-2 ${cls}">
+                    <div class="flex justify-between items-start">
+                        <div class="text-xs font-mono text-slate-300">${hourLabel} – ${hourEnd}</div>
+                        <div class="text-xs font-bold">${statusLabel}</div>
+                    </div>
+                    <div class="text-sm font-semibold mt-1 truncate">${this.esc(booking.carrier)}</div>
+                    <div class="text-xs text-slate-400 truncate">${this.esc(booking.material)}</div>
+                    ${custLine}
+                </div>`;
+            }).join('');
             return `
-            <div class="slot-btn p-4 rounded-xl border-2 ${cls}">
-                <div class="flex justify-between items-start">
-                    <div class="text-sm font-mono text-slate-300">${hourLabel} – ${hourEnd}</div>
-                    <div class="text-xs font-bold ${dirColor}">${dirLabel}</div>
+            <div>
+                <div class="${dock.colClass} dock-col-header">
+                    ${dock.title}
+                    <div class="text-xs font-normal opacity-75 mt-0.5">${dock.subtitle}</div>
                 </div>
-                <div class="text-sm font-semibold mt-1.5 truncate">${this.esc(booking.carrier)}</div>
-                <div class="text-xs text-slate-400 mt-0.5 truncate">${this.esc(booking.material)}</div>
-                ${custLine}
-                <div class="text-xs mt-1 font-semibold">${statusLabel}</div>
+                <div class="dock-col-body ${dock.bodyClass}">
+                    ${slots}
+                </div>
             </div>`;
         }).join('');
         grid.querySelectorAll('[data-slot]').forEach(btn => {
-            btn.addEventListener('click', () => this.openBookModal(btn.dataset.slot));
+            btn.addEventListener('click', () => this.openBookModal(btn.dataset.slot, btn.dataset.dock));
         });
     },
 
     // ─── BOOKING MODAL ──────────────────────────────────────
-    openBookModal(slotISO) {
+    openBookModal(slotISO, dockType) {
         this.state.selectedSlot = slotISO;
         this.state.selectedDir = null;
         this.state.selectedCustomerId = null;
         this.state.selectedTripType = null;
+        this.state.selectedDock = dockType || null;
+        // Auto-select direction based on dock
+        let autoDir = null;
+        if (dockType === 'recycling_out') autoDir = 'outbound';
+        else if (dockType === 'recycling_in') autoDir = 'inbound';
+        else if (dockType === 'pallet_yard') autoDir = 'outbound';
         const d = new Date(slotISO);
         const endD = new Date(d.getTime() + 60*60*1000);
+        const dockLabel = dockType === 'recycling_out' ? '♻️ Recycling Out'
+                        : dockType === 'recycling_in'  ? '📥 Recycling In'
+                        : dockType === 'pallet_yard'   ? '📦 Pallet Yard'
+                        : '';
         document.getElementById('modalSlotTime').textContent =
-            `${d.toLocaleDateString()} · ${this.formatHour(d.getHours())} – ${this.formatHour(endD.getHours())}`;
+            `${d.toLocaleDateString()} · ${this.formatHour(d.getHours())} – ${this.formatHour(endD.getHours())} · ${dockLabel}`;
         document.querySelectorAll('.dir-btn').forEach(b => b.classList.remove('border-ob-500', 'border-ib-500', 'bg-ob-900/30', 'bg-ib-900/30'));
         document.getElementById('modalMaterial').innerHTML = '<option value="">-- Select direction first --</option>';
         ['modalCarrier','modalBOL','modalRelease','modalPO','modalTruck','modalTrailer','modalNotes','modalCustomerSearch'].forEach(id => document.getElementById(id).value = '');
@@ -1146,6 +1203,13 @@ const App = {
         document.getElementById('modalSwapFields').classList.add('hidden');
         document.getElementById('modalRoundTripFields').classList.add('hidden');
         document.querySelectorAll('.trip-btn').forEach(b => b.classList.remove('border-ob-500', 'border-ib-500', 'border-amber-500', 'border-blue-500', 'bg-ob-900/30', 'bg-ib-900/30', 'bg-amber-900/30', 'bg-blue-900/30'));
+        // Auto-select direction (from dock)
+        if (autoDir) this.selectDirection(autoDir);
+        // For pallet_yard, hint that DMX is expected
+        if (dockType === 'pallet_yard') {
+            document.getElementById('modalCarrier').value = 'DalMex Recycling LLC';
+            this.onCarrierInput();
+        }
         this.updateConfirmBtn();
         document.getElementById('bookModal').classList.remove('hidden');
     },
@@ -1156,6 +1220,7 @@ const App = {
         this.state.selectedDir = null;
         this.state.selectedCustomerId = null;
         this.state.selectedTripType = null;
+        this.state.selectedDock = null;
     },
 
     selectDirection(dir) {
@@ -1400,6 +1465,7 @@ const App = {
         const base = {
             time:           this.state.selectedSlot,
             direction:      this.state.selectedDir,
+            dock_type:      this.state.selectedDock,
             material:       document.getElementById('modalMaterial').value.trim(),
             carrier:        document.getElementById('modalCarrier').value.trim(),
             customer_id:    this.state.selectedCustomerId || null,
@@ -1494,6 +1560,7 @@ const App = {
         const inbound = {
             ...base,
             direction: 'inbound',
+            dock_type: 'recycling_in',  // OCC return uses recycling inbound dock
             material: pickupMat,
             trip_type: 'swap',
             drop_trailer_id: dropTrlr,
@@ -1648,6 +1715,7 @@ const App = {
                 <div class="flex-1 min-w-[180px]">
                     <div class="flex items-center gap-2 flex-wrap">
                         <span class="font-bold ${dirText} text-xs">${dirLabel}</span>
+                        ${this.dockBadge(r.dock_type)}
                         ${statusBadge}
                         ${editBadge}
                     </div>
@@ -1848,9 +1916,10 @@ const App = {
         return `
         <div class="route-card bg-slate-800 rounded-xl p-4 border-2 border-slate-700">
             <div class="flex items-center justify-between flex-wrap gap-2">
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 flex-wrap">
                     <span class="w-7 h-7 rounded-full bg-slate-900 flex items-center justify-center font-bold text-sm">${stopNum}</span>
                     <span class="font-mono font-bold text-lg">${hourLabel}</span>
+                    ${this.dockBadge(r.dock_type)}
                     ${tripBadge}
                     ${statusBadge}
                 </div>
@@ -2027,6 +2096,7 @@ const App = {
         document.getElementById('editTrailer').value = booking.trailer_id || '';
         document.getElementById('editStatus').value = booking.status;
         document.getElementById('editArrivalType').value = booking.arrival_type || '';
+        document.getElementById('editDock').value = booking.dock_type || '';
         document.getElementById('editNotes').value = booking.notes || '';
         document.getElementById('editModal').classList.remove('hidden');
     },
@@ -2113,6 +2183,7 @@ const App = {
             trailer_id: document.getElementById('editTrailer').value.trim() || null,
             status: document.getElementById('editStatus').value,
             arrival_type: document.getElementById('editArrivalType').value || null,
+            dock_type: document.getElementById('editDock').value || null,
             notes: document.getElementById('editNotes').value.trim() || null,
         };
         if (!patch.material || !patch.carrier) { this.toast('Material and Carrier required', 'error'); return; }
