@@ -79,6 +79,47 @@
   .dock-badge-rec-out { background: rgba(16,185,129,0.2); color: #34d399; border: 1px solid rgba(16,185,129,0.4); }
   .dock-badge-rec-in  { background: rgba(59,130,246,0.2); color: #60a5fa; border: 1px solid rgba(59,130,246,0.4); }
   .dock-badge-pallet  { background: rgba(245,158,11,0.2); color: #fbbf24; border: 1px solid rgba(245,158,11,0.4); }
+
+  /* ═══════════════════════════════════════════════════════════ */
+  /* TV MODE — for passive big-screen display via Fire Stick     */
+  /* ═══════════════════════════════════════════════════════════ */
+  body.tv-mode-active header,
+  body.tv-mode-active #bookTab,
+  body.tv-mode-active #dashboardTab,
+  body.tv-mode-active #routesTab,
+  body.tv-mode-active #adminTab,
+  body.tv-mode-active #settingsTab,
+  body.tv-mode-active #toast { display: none !important; }
+  body.tv-mode-active { font-size: 1.15rem; }
+  body.tv-mode-active main { max-width: none !important; padding: 1rem 1.5rem !important; }
+  #tvTab { display: none; }
+  body.tv-mode-active #tvTab { display: block !important; }
+  .tv-header { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; background: linear-gradient(90deg, #0f172a, #1e293b); border-radius: 0.75rem; margin-bottom: 1rem; border: 1px solid #334155; }
+  .tv-title { font-size: 2rem; font-weight: 800; letter-spacing: -0.02em; }
+  .tv-datetime { font-size: 1.5rem; font-weight: 700; color: #94a3b8; font-variant-numeric: tabular-nums; }
+  .tv-refresh-indicator { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #10b981; margin-left: 0.5rem; animation: pulse-tv 2s infinite; }
+  @keyframes pulse-tv { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .tv-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+  .tv-col-header { padding: 1rem; border-radius: 0.75rem 0.75rem 0 0; font-weight: 800; font-size: 1.75rem; text-align: center; letter-spacing: 0.02em; }
+  .tv-col-rec-out  { background: rgba(16,185,129,0.25); color: #6ee7b7; border: 3px solid rgba(16,185,129,0.5); border-bottom: none; }
+  .tv-col-rec-in   { background: rgba(59,130,246,0.25); color: #93c5fd; border: 3px solid rgba(59,130,246,0.5); border-bottom: none; }
+  .tv-col-pallet   { background: rgba(245,158,11,0.25); color: #fcd34d; border: 3px solid rgba(245,158,11,0.5); border-bottom: none; }
+  .tv-col-body     { padding: 0.75rem; background: rgba(15,23,42,0.5); border-radius: 0 0 0.75rem 0.75rem; border: 3px solid; border-top: none; min-height: 70vh; }
+  .tv-col-body-rec-out { border-color: rgba(16,185,129,0.5); }
+  .tv-col-body-rec-in  { border-color: rgba(59,130,246,0.5); }
+  .tv-col-body-pallet  { border-color: rgba(245,158,11,0.5); }
+  .tv-slot { padding: 0.875rem 1rem; margin-bottom: 0.625rem; border-radius: 0.5rem; border: 2px solid; }
+  .tv-slot-empty { background: rgba(30,41,59,0.3); border-color: #334155; color: #64748b; }
+  .tv-slot-booked { background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.5); }
+  .tv-slot-arrived { background: rgba(234,179,8,0.18); border-color: rgba(234,179,8,0.6); }
+  .tv-slot-completed { background: rgba(100,116,139,0.15); border-color: rgba(100,116,139,0.4); opacity: 0.6; }
+  .tv-slot-now { box-shadow: 0 0 0 3px #fbbf24, 0 0 20px rgba(251,191,36,0.5); }
+  .tv-slot-time { font-size: 1.5rem; font-weight: 800; font-family: ui-monospace, monospace; color: #e2e8f0; }
+  .tv-slot-status { font-size: 1rem; font-weight: 700; }
+  .tv-slot-carrier { font-size: 1.25rem; font-weight: 700; color: #f1f5f9; margin-top: 0.25rem; }
+  .tv-slot-material { font-size: 1rem; color: #94a3b8; }
+  .tv-slot-cust { font-size: 1rem; color: #cbd5e1; margin-top: 0.25rem; }
+  .tv-legend { display: flex; justify-content: center; gap: 1.5rem; margin-top: 1rem; font-size: 1rem; color: #94a3b8; }
 </style>
 
 </head>
@@ -359,6 +400,23 @@
         <button id="resetSettings" class="px-4 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 font-semibold text-white text-sm">Reset</button>
       </div>
       <div id="settingsStatus" class="text-xs text-slate-400 text-center"></div>
+    </div>
+  </section>
+
+  <!-- TV MODE — activated via #tv hash. Hidden in normal view. -->
+
+  <section id="tvTab">
+    <div class="tv-header">
+      <div class="tv-title">📋 DALMEX SCHEDULE<span class="tv-refresh-indicator" title="Live"></span></div>
+      <div class="tv-datetime" id="tvClock">—</div>
+    </div>
+    <div id="tvGrid" class="tv-grid"></div>
+    <div class="tv-legend">
+      <span>🟢 Available</span>
+      <span>📋 Booked</span>
+      <span>🟡 On Site</span>
+      <span>✓ Done</span>
+      <span>🔶 = Current Hour</span>
     </div>
   </section>
 </main>
@@ -928,6 +986,95 @@ const App = {
         this.loadTrailers();
         this.loadSchedule();
         setInterval(() => { if (this.state.activeTab === 'dashboard' || this.state.activeTab === 'routes') this.loadSchedule(); }, 30000);
+        // TV MODE (activated via #tv in URL) — passive big-screen display
+        this.initTvMode();
+    },
+
+    initTvMode() {
+        const isTv = window.location.hash === '#tv';
+        if (!isTv) return;
+        document.body.classList.add('tv-mode-active');
+        this.state.tvMode = true;
+        // Always show today in TV mode
+        this.state.activeDate = new Date().toISOString().slice(0, 10);
+        this.tvClockTick();
+        this.renderTvBoard();
+        // Update clock every second
+        setInterval(() => this.tvClockTick(), 1000);
+        // Refresh schedule + rerender every 30 seconds
+        setInterval(async () => {
+            this.state.activeDate = new Date().toISOString().slice(0, 10);
+            await this.loadSchedule();
+            this.renderTvBoard();
+        }, 30000);
+    },
+
+    tvClockTick() {
+        const el = document.getElementById('tvClock');
+        if (!el) return;
+        const now = new Date();
+        const date = now.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+        const time = now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+        el.textContent = `${date} · ${time}`;
+    },
+
+    renderTvBoard() {
+        const grid = document.getElementById('tvGrid');
+        if (!grid) return;
+        const date = this.state.activeDate;
+        const now = new Date();
+        const currentHour = now.getHours();
+        const isToday = date === new Date().toISOString().slice(0, 10);
+        const hours = [];
+        for (let h = this.state.startHour; h < this.state.endHour; h++) {
+            hours.push({ hour: h, iso: this.localIsoForHour(date, h) });
+        }
+        const docks = [
+            { key: 'recycling_out', title: '♻️ RECYCLING OUT', colClass: 'tv-col-rec-out', bodyClass: 'tv-col-body-rec-out' },
+            { key: 'recycling_in',  title: '📥 RECYCLING IN',  colClass: 'tv-col-rec-in',  bodyClass: 'tv-col-body-rec-in' },
+            { key: 'pallet_yard',   title: '📦 PALLET YARD',   colClass: 'tv-col-pallet',  bodyClass: 'tv-col-body-pallet' },
+        ];
+        grid.innerHTML = docks.map(dock => {
+            const slots = hours.map(s => {
+                const booking = this.state.schedule.find(r =>
+                    new Date(r.time).getTime() === new Date(s.iso).getTime() &&
+                    r.dock_type === dock.key &&
+                    r.status !== 'cancelled' && r.status !== 'no_show'
+                );
+                const hourLabel = this.formatHour(s.hour);
+                const hourEnd = this.formatHour(s.hour + 1);
+                const isNow = isToday && s.hour === currentHour;
+                const nowCls = isNow ? 'tv-slot-now' : '';
+                if (!booking) {
+                    return `
+                    <div class="tv-slot tv-slot-empty ${nowCls}">
+                        <div class="tv-slot-time">${hourLabel} – ${hourEnd}</div>
+                        <div class="tv-slot-material">Available</div>
+                    </div>`;
+                }
+                let cls = 'tv-slot-booked';
+                let status = '📋 BOOKED';
+                if (booking.status === 'arrived') { cls = 'tv-slot-arrived'; status = booking.arrival_type === 'late' ? '⏩ LATE' : booking.arrival_type === 'early' ? '⏪ EARLY' : '🟡 ON SITE'; }
+                else if (booking.status === 'completed') { cls = 'tv-slot-completed'; status = '✓ DONE'; }
+                const customer = this.customerById(booking.customer_id);
+                const custLine = customer ? `<div class="tv-slot-cust">→ ${this.esc(customer.display_name || customer.name)}</div>` : '';
+                return `
+                <div class="tv-slot ${cls} ${nowCls}">
+                    <div style="display:flex;justify-content:space-between;align-items:baseline">
+                        <div class="tv-slot-time">${hourLabel}</div>
+                        <div class="tv-slot-status">${status}</div>
+                    </div>
+                    <div class="tv-slot-carrier">${this.esc(booking.carrier)}</div>
+                    <div class="tv-slot-material">${this.esc(booking.material)}</div>
+                    ${custLine}
+                </div>`;
+            }).join('');
+            return `
+            <div>
+                <div class="${dock.colClass} tv-col-header">${dock.title}</div>
+                <div class="tv-col-body ${dock.bodyClass}">${slots}</div>
+            </div>`;
+        }).join('');
     },
 
     loadConfig() {
@@ -1127,6 +1274,7 @@ const App = {
         const to   = new Date(d); to.setDate(d.getDate() + 2);
         const rows = await this.supabase(`schedule?time=gte.${from.toISOString()}&time=lt.${to.toISOString()}&order=time.asc`);
         this.state.schedule = rows || [];
+        if (this.state.tvMode) this.renderTvBoard();
         if (this.state.activeTab === 'book') this.renderSlotGrid();
         if (this.state.activeTab === 'dashboard') this.renderDashboard();
         if (this.state.activeTab === 'routes') await this.renderRoutes();
