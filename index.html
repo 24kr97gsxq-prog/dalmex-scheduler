@@ -80,6 +80,21 @@
   .dock-badge-rec-in  { background: rgba(59,130,246,0.2); color: #60a5fa; border: 1px solid rgba(59,130,246,0.4); }
   .dock-badge-pallet  { background: rgba(245,158,11,0.2); color: #fbbf24; border: 1px solid rgba(245,158,11,0.4); }
 
+  /* ═══ PRINT STYLES — for route sheet (Juan's paper backup) ═══ */
+  @media print {
+    body { background: white !important; color: black !important; font-family: Arial, sans-serif; }
+    header, .tab-btn, #routesPrevDay, #routesTodayBtn, #routesNextDay, #routesDate, #routesPrint,
+    #bookTab, #dashboardTab, #adminTab, #settingsTab, #tvTab, #toast { display: none !important; }
+    main { max-width: none !important; padding: 0 !important; }
+    .route-card { page-break-inside: avoid; border: 2px solid #333 !important; background: white !important; margin-bottom: 0.75rem !important; padding: 0.75rem !important; color: black !important; }
+    .route-card * { color: black !important; }
+    .route-card .bg-amber-900\/50, .route-card [class*="bg-"] { background: transparent !important; border-color: #333 !important; }
+    #routesTab h2 { font-size: 1.5rem !important; margin-bottom: 0.25rem; }
+    #routesTab h2::after { content: " — DMX Driver Route Sheet"; font-weight: normal; color: #666; }
+    .print-only { display: block !important; }
+  }
+  .print-only { display: none; }
+
   /* ═══════════════════════════════════════════════════════════ */
   /* TV MODE — for passive big-screen display via Fire Stick     */
   /* ═══════════════════════════════════════════════════════════ */
@@ -218,11 +233,12 @@
         <h2 class="text-2xl font-bold">🚚 Driver Schedule</h2>
         <p class="text-sm text-slate-400" id="routesSubtitle">Today's DMX driver stops</p>
       </div>
-      <div class="flex gap-2">
+      <div class="flex gap-2 flex-wrap">
         <button id="routesPrevDay" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">◀</button>
         <button id="routesTodayBtn" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">Today</button>
         <input type="date" id="routesDate" class="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm">
         <button id="routesNextDay" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold">▶</button>
+        <button id="routesPrint" class="px-3 py-2 rounded-lg bg-blue-700 hover:bg-blue-800 text-sm font-semibold text-white">🖨️ Print Route Sheet</button>
       </div>
     </div>
 
@@ -942,7 +958,12 @@ const isPdfFile   = (file) => file && ((file.type || '').includes('pdf') || /\.p
 const isImageUrl  = (url)  => url && /\.(jpg|jpeg|png|webp|heic|heif|gif)(\?|$)/i.test(url);
 const isPdfUrl    = (url)  => url && /\.pdf(\?|$)/i.test(url);
 const fileExt     = (name) => (name || '').split('.').pop().toLowerCase() || 'file';
-const isDmxCarrier = (carrier) => carrier && /dalmex/i.test(carrier);
+const isDmxCarrier = (carrier) => {
+    if (!carrier) return false;
+    const c = carrier.toLowerCase().trim();
+    // Match: dalmex, dal mex, dmx, dm (as standalone or prefix)
+    return /dalmex|dal\s*mex|\bdmx\b|\bdm\b/i.test(c);
+};
 
 const App = {
     state: {
@@ -953,7 +974,14 @@ const App = {
         activeDate:   new Date().toISOString().slice(0,10),
         routesDate:   new Date().toISOString().slice(0,10),
         activeTab:    'book',
-        adminUnlocked: false,
+        adminUnlocked: (() => {
+            try {
+                const raw = sessionStorage.getItem('dmx_admin_unlock');
+                if (!raw) return false;
+                const { until } = JSON.parse(raw);
+                return until && Date.now() < until;
+            } catch(e) { return false; }
+        })(),
         adminSubtab: 'customers',
         custFilter:  'active',
         custSearch:  '',
@@ -980,6 +1008,15 @@ const App = {
     init() {
         this.loadConfig();
         this.bindEvents();
+        // Apply persisted admin state (8-hour session)
+        if (this.state.adminUnlocked) {
+            const gate = document.getElementById('adminGate');
+            const content = document.getElementById('adminContent');
+            const settingsBtn = document.getElementById('settingsTabBtn');
+            if (gate) gate.classList.add('hidden');
+            if (content) content.classList.remove('hidden');
+            if (settingsBtn) settingsBtn.classList.remove('hidden');
+        }
         document.getElementById('bookDate').value = this.state.activeDate;
         document.getElementById('routesDate').value = this.state.routesDate;
         this.loadMaterials();
@@ -2408,6 +2445,12 @@ const App = {
         const val = document.getElementById('pinInput').value.trim();
         if (val === ADMIN_PIN) {
             this.state.adminUnlocked = true;
+            // Persist for 8 hours
+            try {
+                sessionStorage.setItem('dmx_admin_unlock', JSON.stringify({
+                    until: Date.now() + 8 * 60 * 60 * 1000
+                }));
+            } catch(e) {}
             document.getElementById('adminGate').classList.add('hidden');
             document.getElementById('adminContent').classList.remove('hidden');
             document.getElementById('pinError').classList.add('hidden');
@@ -2425,6 +2468,7 @@ const App = {
 
     lockAdmin() {
         this.state.adminUnlocked = false;
+        try { sessionStorage.removeItem('dmx_admin_unlock'); } catch(e) {}
         document.getElementById('adminGate').classList.remove('hidden');
         document.getElementById('adminContent').classList.add('hidden');
         document.getElementById('settingsTabBtn').classList.add('hidden');
@@ -3016,6 +3060,7 @@ const App = {
             document.getElementById('routesDate').value = today;
             this.renderRoutes();
         });
+        document.getElementById('routesPrint').addEventListener('click', () => window.print());
         // Dashboard refresh
         document.getElementById('refreshDash').addEventListener('click', () => this.loadSchedule());
 
