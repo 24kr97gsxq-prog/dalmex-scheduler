@@ -741,6 +741,7 @@
         <textarea id="editNotes" rows="3" class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm"></textarea>
       </div>
       <div class="flex gap-2 pt-2">
+        <button id="editCancel" class="px-4 py-3 rounded-lg bg-slate-700 hover:bg-slate-600 font-bold text-white text-sm">Cancel</button>
         <button id="editSave" class="flex-1 py-3 rounded-lg bg-ob-600 hover:bg-ob-700 font-bold text-white">Save Changes</button>
         <button id="editDelete" class="px-5 py-3 rounded-lg bg-red-700 hover:bg-red-800 font-bold text-white text-sm">🗑️ Delete</button>
       </div>
@@ -2387,14 +2388,18 @@ const App = {
         const date = document.getElementById('editDate').value;
         const hour = parseInt(document.getElementById('editHour').value, 10);
         const newTime = this.localIsoForHour(date, hour);
-        if (newTime !== booking.time) {
+        const newDock = document.getElementById('editDock').value || null;
+        // Only flag a conflict when the new (time, dock_type) actually collides with a DIFFERENT booking
+        if (newTime !== booking.time || newDock !== booking.dock_type) {
             const collision = this.state.schedule.find(r =>
                 String(r.id) !== String(booking.id) &&
                 new Date(r.time).getTime() === new Date(newTime).getTime() &&
+                r.dock_type === newDock &&
+                newDock !== null &&
                 r.status !== 'cancelled' && r.status !== 'no_show'
             );
             if (collision) {
-                if (!confirm(`⚠️ Slot already booked by "${collision.carrier}" (${collision.material}).\n\nMove anyway?`)) return;
+                if (!confirm(`⚠️ Slot already booked by "${collision.carrier}" (${collision.material}) on the same dock.\n\nMove anyway?`)) return;
             }
         }
         const custVal = document.getElementById('editCustomer').value;
@@ -2414,7 +2419,8 @@ const App = {
             dock_type: document.getElementById('editDock').value || null,
             notes: document.getElementById('editNotes').value.trim() || null,
         };
-        if (!patch.material || !patch.carrier) { this.toast('Material and Carrier required', 'error'); return; }
+        if (!patch.material) { this.toast('Material required', 'error'); return; }
+        if (!patch.carrier) patch.carrier = 'TBD';
         const btn = document.getElementById('editSave');
         btn.disabled = true;
         btn.textContent = 'Saving…';
@@ -3086,6 +3092,7 @@ const App = {
         document.getElementById('closeEditModal').addEventListener('click', () => this.closeEditModal());
         document.querySelectorAll('.edit-dir-btn').forEach(b => b.addEventListener('click', () => this.selectEditDirection(b.dataset.dir)));
         document.getElementById('editSave').addEventListener('click', () => this.saveEdit());
+        document.getElementById('editCancel').addEventListener('click', () => this.closeEditModal());
         document.getElementById('editDelete').addEventListener('click', () => this.deleteBooking());
 
         // Customer modal
